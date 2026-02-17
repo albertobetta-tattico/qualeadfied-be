@@ -2,8 +2,11 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Enums\UserRole;
+use App\Enums\UserStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
@@ -18,9 +21,10 @@ class User extends Authenticatable
      * @var list<string>
      */
     protected $fillable = [
-        'name',
         'email',
         'password',
+        'role',
+        'status',
     ];
 
     /**
@@ -43,6 +47,64 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'role' => UserRole::class,
+            'status' => UserStatus::class,
         ];
+    }
+
+    /**
+     * @return HasOne<ClientProfile, $this>
+     */
+    public function clientProfile(): HasOne
+    {
+        return $this->hasOne(ClientProfile::class);
+    }
+
+    /**
+     * @return HasMany<Order, $this>
+     */
+    public function orders(): HasMany
+    {
+        return $this->hasMany(Order::class);
+    }
+
+    /**
+     * @return HasMany<UserPackage, $this>
+     */
+    public function userPackages(): HasMany
+    {
+        return $this->hasMany(UserPackage::class);
+    }
+
+    /**
+     * @return HasMany<UserLead, $this>
+     */
+    public function userLeads(): HasMany
+    {
+        return $this->hasMany(UserLead::class);
+    }
+
+    /**
+     * @return HasMany<LeadSale, $this>
+     */
+    public function leadSales(): HasMany
+    {
+        return $this->hasMany(LeadSale::class);
+    }
+
+    /**
+     * @return HasMany<CartItem, $this>
+     */
+    public function cartItems(): HasMany
+    {
+        return $this->hasMany(CartItem::class);
+    }
+
+    /**
+     * @return HasMany<NotificationSetting, $this>
+     */
+    public function notificationSettings(): HasMany
+    {
+        return $this->hasMany(NotificationSetting::class);
     }
 }

@@ -1,0 +1,69 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Models\Admin;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
+
+class AdminController extends Controller
+{
+    public function index(Request $request): JsonResponse
+    {
+        $admins = Admin::paginate(15);
+
+        return response()->json($admins);
+    }
+
+    public function show(Admin $admin): JsonResponse
+    {
+        return response()->json(['admin' => $admin]);
+    }
+
+    public function store(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'email' => ['required', 'email', 'unique:admins,email'],
+            'first_name' => ['required', 'string', 'max:100'],
+            'last_name' => ['required', 'string', 'max:100'],
+            'password' => ['required', 'string', 'min:8'],
+            'role' => ['required', 'string'],
+            'status' => ['sometimes', 'string'],
+        ]);
+
+        $validated['password'] = Hash::make($validated['password']);
+
+        $admin = Admin::create($validated);
+
+        return response()->json(['admin' => $admin], 201);
+    }
+
+    public function update(Request $request, Admin $admin): JsonResponse
+    {
+        $validated = $request->validate([
+            'email' => ['sometimes', 'email', 'unique:admins,email,' . $admin->id],
+            'first_name' => ['sometimes', 'string', 'max:100'],
+            'last_name' => ['sometimes', 'string', 'max:100'],
+            'password' => ['sometimes', 'string', 'min:8'],
+            'role' => ['sometimes', 'string'],
+            'status' => ['sometimes', 'string'],
+        ]);
+
+        if (isset($validated['password'])) {
+            $validated['password'] = Hash::make($validated['password']);
+        }
+
+        $admin->update($validated);
+
+        return response()->json(['admin' => $admin]);
+    }
+
+    public function destroy(Admin $admin): JsonResponse
+    {
+        $admin->delete();
+
+        return response()->json(null, 204);
+    }
+}
