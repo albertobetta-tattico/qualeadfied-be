@@ -31,6 +31,9 @@ class AuthController extends Controller
         ], 201);
     }
 
+    /**
+     * @response array{message: string, user: User, token: string}
+     */
     public function login(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -64,6 +67,9 @@ class AuthController extends Controller
         ]);
     }
 
+    /**
+     * @response array{user: User}
+     */
     public function me(Request $request): JsonResponse
     {
         return response()->json([

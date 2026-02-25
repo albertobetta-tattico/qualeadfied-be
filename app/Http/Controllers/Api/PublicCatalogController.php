@@ -12,6 +12,25 @@ use Illuminate\Support\Str;
 
 class PublicCatalogController extends Controller
 {
+    /**
+     * @return JsonResponse
+     *
+     * @response array{
+     *   data: list<array{
+     *     id: int,
+     *     category: \App\Models\Category,
+     *     province: \App\Models\Province,
+     *     request_preview: string,
+     *     generated_at: string,
+     *     status: \App\Enums\LeadStatus,
+     *     current_shares: int
+     *   }>,
+     *   current_page: int,
+     *   last_page: int,
+     *   per_page: int,
+     *   total: int
+     * }
+     */
     public function leads(Request $request): JsonResponse
     {
         $query = Lead::where('status', 'free')
