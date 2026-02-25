@@ -6,9 +6,11 @@ use App\Enums\AdminRole;
 use App\Enums\AdminStatus;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
+use Laravel\Sanctum\HasApiTokens;
 
 class Admin extends Authenticatable
 {
+    use HasApiTokens;
     /**
      * The table associated with the model.
      *
@@ -28,6 +30,7 @@ class Admin extends Authenticatable
         'password',
         'role',
         'status',
+        'last_login_at',
     ];
 
     /**

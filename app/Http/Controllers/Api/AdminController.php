@@ -33,8 +33,6 @@ class AdminController extends Controller
             'status' => ['sometimes', 'string'],
         ]);
 
-        $validated['password'] = Hash::make($validated['password']);
-
         $admin = Admin::create($validated);
 
         return response()->json(['admin' => $admin], 201);
@@ -50,10 +48,6 @@ class AdminController extends Controller
             'role' => ['sometimes', 'string'],
             'status' => ['sometimes', 'string'],
         ]);
-
-        if (isset($validated['password'])) {
-            $validated['password'] = Hash::make($validated['password']);
-        }
 
         $admin->update($validated);
 

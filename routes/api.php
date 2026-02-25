@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AdminActivityLogController;
+use App\Http\Controllers\Api\AdminAuthController;
 use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CartItemController;
@@ -45,6 +46,11 @@ Route::prefix('auth')->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
     Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
     Route::post('/reset-password', [AuthController::class, 'resetPassword']);
+});
+
+// Admin authentication (public - no auth required)
+Route::prefix('admin/auth')->group(function () {
+    Route::post('/login', [AdminAuthController::class, 'login']);
 });
 
 Route::prefix('public')->group(function () {
@@ -97,6 +103,10 @@ Route::middleware('auth:sanctum')->group(function () {
 // ──────────────────────────────────────────────────────────────────────────
 
 Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
+
+    // Admin auth (authenticated)
+    Route::post('/auth/logout', [AdminAuthController::class, 'logout']);
+    Route::get('/auth/me', [AdminAuthController::class, 'me']);
 
     // Users
     Route::apiResource('users', UserController::class);
