@@ -15,7 +15,7 @@ class LeadSaleController extends Controller
             ->orderByDesc('sold_at')
             ->paginate(15);
 
-        return response()->json($sales);
+        return $this->paginatedResponse($sales);
     }
 
     public function store(Request $request): JsonResponse

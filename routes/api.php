@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\CartItemController;
 use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\CategoryPriceController;
 use App\Http\Controllers\Api\ClientProfileController;
+use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\InvoiceController;
 use App\Http\Controllers\Api\LeadController;
 use App\Http\Controllers\Api\LeadSaleController;
@@ -16,9 +17,11 @@ use App\Http\Controllers\Api\NotificationSettingController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\OrderItemController;
 use App\Http\Controllers\Api\PackageController;
+use App\Http\Controllers\Api\PricingController;
 use App\Http\Controllers\Api\ProvinceController;
 use App\Http\Controllers\Api\PublicCatalogController;
 use App\Http\Controllers\Api\PublicLeadSubmissionController;
+use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\SystemSettingController;
 use App\Http\Controllers\Api\TransactionController;
 use App\Http\Controllers\Api\UserController;
@@ -108,7 +111,15 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
     Route::post('/auth/logout', [AdminAuthController::class, 'logout']);
     Route::get('/auth/me', [AdminAuthController::class, 'me']);
 
-    // Users
+    // Dashboard
+    Route::get('/dashboard', [DashboardController::class, 'index']);
+
+    // Users - stats BEFORE apiResource
+    Route::get('/users/stats', [UserController::class, 'stats']);
+    Route::post('/users/{user}/suspend', [UserController::class, 'suspend']);
+    Route::post('/users/{user}/activate', [UserController::class, 'activate']);
+    Route::post('/users/{user}/reset-password', [UserController::class, 'resetPassword']);
+    Route::put('/users/{user}/free-trial', [UserController::class, 'updateFreeTrial']);
     Route::apiResource('users', UserController::class);
 
     // Client profiles
@@ -117,24 +128,33 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
     // Admins
     Route::apiResource('admins', AdminController::class);
 
-    // Categories
+    // Categories - stats and toggle BEFORE apiResource
+    Route::get('/categories/stats', [CategoryController::class, 'stats']);
+    Route::post('/categories/{category}/toggle-active', [CategoryController::class, 'toggleActive']);
     Route::apiResource('categories', CategoryController::class);
     Route::get('/categories/{category}/prices', [CategoryPriceController::class, 'index']);
     Route::post('/categories/{category}/prices', [CategoryPriceController::class, 'store']);
 
-    // Provinces (read-only)
+    // Provinces - stats and toggle BEFORE apiResource
+    Route::get('/provinces/stats', [ProvinceController::class, 'stats']);
+    Route::post('/provinces/{province}/toggle-active', [ProvinceController::class, 'toggleActive']);
     Route::apiResource('provinces', ProvinceController::class)->only(['index', 'show']);
 
-    // Lead sources
+    // Lead sources - regenerate-key BEFORE apiResource
+    Route::post('/lead-sources/{leadSource}/regenerate-key', [LeadSourceController::class, 'regenerateKey']);
     Route::apiResource('lead-sources', LeadSourceController::class);
 
-    // Leads
+    // Leads - stats BEFORE apiResource
+    Route::get('/leads/stats', [LeadController::class, 'stats']);
     Route::apiResource('leads', LeadController::class);
 
-    // Packages
+    // Packages - stats and toggle BEFORE apiResource
+    Route::get('/packages/stats', [PackageController::class, 'stats']);
+    Route::post('/packages/{package}/toggle-active', [PackageController::class, 'toggleActive']);
     Route::apiResource('packages', PackageController::class);
 
-    // Orders (read-only for admin)
+    // Orders - stats BEFORE other order routes
+    Route::get('/orders/stats', [OrderController::class, 'stats']);
     Route::get('/orders', [OrderController::class, 'index']);
     Route::get('/orders/{order}', [OrderController::class, 'show']);
     Route::get('/orders/{order}/items', [OrderItemController::class, 'index']);
@@ -142,11 +162,29 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
     // Lead sales
     Route::apiResource('lead-sales', LeadSaleController::class)->only(['index', 'store']);
 
-    // Transactions (read-only)
+    // Transactions - stats BEFORE apiResource
+    Route::get('/transactions/stats', [TransactionController::class, 'stats']);
     Route::apiResource('transactions', TransactionController::class)->only(['index', 'show']);
 
-    // Invoices (read-only)
+    // Invoices - stats and actions BEFORE apiResource
+    Route::get('/invoices/stats', [InvoiceController::class, 'stats']);
+    Route::post('/invoices/{invoice}/resend-sdi', [InvoiceController::class, 'resendSdi']);
+    Route::get('/invoices/{invoice}/pdf', [InvoiceController::class, 'downloadPdf']);
+    Route::post('/invoices/{invoice}/send-email', [InvoiceController::class, 'sendEmail']);
+    Route::post('/invoices/{invoice}/credit-note', [InvoiceController::class, 'createCreditNote']);
     Route::apiResource('invoices', InvoiceController::class)->only(['index', 'show']);
+
+    // Pricing
+    Route::get('/pricing', [PricingController::class, 'index']);
+    Route::get('/pricing/stats', [PricingController::class, 'stats']);
+    Route::get('/pricing/history', [PricingController::class, 'history']);
+    Route::get('/pricing/{categoryId}', [PricingController::class, 'show']);
+    Route::put('/pricing/{categoryId}', [PricingController::class, 'update']);
+
+    // Reports
+    Route::get('/reports/sales', [ReportController::class, 'sales']);
+    Route::get('/reports/categories', [ReportController::class, 'categories']);
+    Route::get('/reports/geographic', [ReportController::class, 'geographic']);
 
     // Activity logs (read-only)
     Route::get('/activity-logs', [AdminActivityLogController::class, 'index']);

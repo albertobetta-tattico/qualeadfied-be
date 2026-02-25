@@ -13,14 +13,14 @@ class SystemSettingController extends Controller
     {
         $settings = SystemSetting::all();
 
-        return response()->json(['settings' => $settings]);
+        return response()->json(['data' => $settings]);
     }
 
     public function show(string $key): JsonResponse
     {
         $setting = SystemSetting::where('key', $key)->firstOrFail();
 
-        return response()->json(['setting' => $setting]);
+        return response()->json(['data' => $setting]);
     }
 
     public function update(Request $request, string $key): JsonResponse
@@ -32,6 +32,6 @@ class SystemSettingController extends Controller
         $setting = SystemSetting::where('key', $key)->firstOrFail();
         $setting->update(['value' => $validated['value']]);
 
-        return response()->json(['setting' => $setting]);
+        return response()->json(['data' => $setting]);
     }
 }

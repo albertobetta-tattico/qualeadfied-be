@@ -59,7 +59,7 @@ class PublicCatalogController extends Controller
                 ];
             });
 
-        return response()->json($leads);
+        return $this->paginatedResponse($leads);
     }
 
     public function categories(): JsonResponse

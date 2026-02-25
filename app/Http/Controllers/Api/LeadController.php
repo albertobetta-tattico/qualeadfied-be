@@ -13,6 +13,15 @@ class LeadController extends Controller
     {
         $query = Lead::query();
 
+        if ($request->filled('search')) {
+            $search = $request->input('search');
+            $query->where(function ($q) use ($search) {
+                $q->where('first_name', 'like', '%'.$search.'%')
+                  ->orWhere('last_name', 'like', '%'.$search.'%')
+                  ->orWhere('email', 'like', '%'.$search.'%');
+            });
+        }
+
         if ($request->filled('category_id')) {
             $query->where('category_id', $request->input('category_id'));
         }
@@ -21,22 +30,39 @@ class LeadController extends Controller
             $query->where('province_id', $request->input('province_id'));
         }
 
+        if ($request->filled('source_id')) {
+            $query->where('source_id', $request->input('source_id'));
+        }
+
         if ($request->filled('status')) {
             $query->where('status', $request->input('status'));
         }
 
-        $leads = $query->with(['category', 'province', 'source'])
-            ->orderByDesc('created_at')
-            ->paginate(15);
+        if ($request->filled('date_from')) {
+            $query->where('created_at', '>=', $request->input('date_from'));
+        }
 
-        return response()->json($leads);
+        if ($request->filled('date_to')) {
+            $query->where('created_at', '<=', $request->input('date_to'));
+        }
+
+        $sortBy = $request->input('sort_by', 'created_at');
+        $sortOrder = $request->input('sort_order', 'desc');
+        $query->orderBy($sortBy, $sortOrder);
+
+        $perPage = $request->input('per_page', 20);
+
+        $leads = $query->with(['category', 'province', 'source'])
+            ->paginate($perPage);
+
+        return $this->paginatedResponse($leads);
     }
 
     public function show(Lead $lead): JsonResponse
     {
         $lead->load(['category', 'province', 'source']);
 
-        return response()->json(['lead' => $lead]);
+        return response()->json(['data' => $lead]);
     }
 
     public function store(Request $request): JsonResponse
@@ -59,8 +85,9 @@ class LeadController extends Controller
         $validated['current_shares'] = 0;
 
         $lead = Lead::create($validated);
+        $lead->load(['category', 'province', 'source']);
 
-        return response()->json(['lead' => $lead], 201);
+        return response()->json(['data' => $lead], 201);
     }
 
     public function update(Request $request, Lead $lead): JsonResponse
@@ -78,8 +105,9 @@ class LeadController extends Controller
         ]);
 
         $lead->update($validated);
+        $lead->load(['category', 'province', 'source']);
 
-        return response()->json(['lead' => $lead]);
+        return response()->json(['data' => $lead]);
     }
 
     public function destroy(Lead $lead): JsonResponse
@@ -94,5 +122,16 @@ class LeadController extends Controller
         $lead->delete();
 
         return response()->json(null, 204);
+    }
+
+    public function stats(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'total' => Lead::count(),
+            'free' => Lead::where('status', 'free')->count(),
+            'sold_exclusive' => Lead::where('status', 'sold_exclusive')->count(),
+            'sold_shared' => Lead::where('status', 'sold_shared')->count(),
+            'exhausted' => Lead::where('status', 'exhausted')->count(),
+        ]]);
     }
 }

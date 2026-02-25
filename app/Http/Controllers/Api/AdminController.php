@@ -12,14 +12,36 @@ class AdminController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $admins = Admin::paginate(15);
+        $query = Admin::query();
 
-        return response()->json($admins);
+        if ($request->filled('search')) {
+            $search = $request->input('search');
+            $query->where(function ($q) use ($search) {
+                $q->where('email', 'like', '%'.$search.'%')
+                  ->orWhere('first_name', 'like', '%'.$search.'%')
+                  ->orWhere('last_name', 'like', '%'.$search.'%');
+            });
+        }
+
+        if ($request->filled('role')) {
+            $query->where('role', $request->input('role'));
+        }
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->input('status'));
+        }
+
+        $sortBy = $request->input('sort_by', 'created_at');
+        $sortOrder = $request->input('sort_order', 'desc');
+        $query->orderBy($sortBy, $sortOrder);
+
+        $perPage = $request->input('per_page', 20);
+        return $this->paginatedResponse($query->paginate($perPage));
     }
 
     public function show(Admin $admin): JsonResponse
     {
-        return response()->json(['admin' => $admin]);
+        return response()->json(['data' => $admin]);
     }
 
     public function store(Request $request): JsonResponse
@@ -35,7 +57,7 @@ class AdminController extends Controller
 
         $admin = Admin::create($validated);
 
-        return response()->json(['admin' => $admin], 201);
+        return response()->json(['data' => $admin], 201);
     }
 
     public function update(Request $request, Admin $admin): JsonResponse
@@ -51,7 +73,7 @@ class AdminController extends Controller
 
         $admin->update($validated);
 
-        return response()->json(['admin' => $admin]);
+        return response()->json(['data' => $admin]);
     }
 
     public function destroy(Admin $admin): JsonResponse

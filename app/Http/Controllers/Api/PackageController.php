@@ -11,14 +11,32 @@ class PackageController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $packages = Package::orderBy('sort_order')->paginate(15);
+        $query = Package::query();
 
-        return response()->json($packages);
+        if ($request->filled('search')) {
+            $query->where('name', 'like', '%'.$request->input('search').'%');
+        }
+
+        if ($request->filled('category_id')) {
+            $categoryId = $request->input('category_id');
+            $query->whereJsonContains('category_ids', (int) $categoryId);
+        }
+
+        if ($request->has('is_active') && $request->input('is_active') !== '') {
+            $query->where('is_active', filter_var($request->input('is_active'), FILTER_VALIDATE_BOOLEAN));
+        }
+
+        $sortBy = $request->input('sort_by', 'sort_order');
+        $sortOrder = $request->input('sort_order', 'asc');
+        $query->orderBy($sortBy, $sortOrder);
+
+        $perPage = $request->input('per_page', 20);
+        return $this->paginatedResponse($query->paginate($perPage));
     }
 
     public function show(Package $package): JsonResponse
     {
-        return response()->json(['package' => $package]);
+        return response()->json(['data' => $package]);
     }
 
     public function store(Request $request): JsonResponse
@@ -38,7 +56,7 @@ class PackageController extends Controller
 
         $package = Package::create($validated);
 
-        return response()->json(['package' => $package], 201);
+        return response()->json(['data' => $package], 201);
     }
 
     public function update(Request $request, Package $package): JsonResponse
@@ -58,7 +76,7 @@ class PackageController extends Controller
 
         $package->update($validated);
 
-        return response()->json(['package' => $package]);
+        return response()->json(['data' => $package]);
     }
 
     public function destroy(Package $package): JsonResponse
@@ -66,5 +84,21 @@ class PackageController extends Controller
         $package->delete();
 
         return response()->json(null, 204);
+    }
+
+    public function toggleActive(Package $package): JsonResponse
+    {
+        $package->update(['is_active' => !$package->is_active]);
+
+        return response()->json(['data' => $package]);
+    }
+
+    public function stats(): JsonResponse
+    {
+        return response()->json(['data' => [
+            'total' => Package::count(),
+            'active' => Package::where('is_active', true)->count(),
+            'inactive' => Package::where('is_active', false)->count(),
+        ]]);
     }
 }

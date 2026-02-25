@@ -21,7 +21,7 @@ class UserLeadController extends Controller
             ->orderByDesc('purchased_at')
             ->paginate(15);
 
-        return response()->json($userLeads);
+        return $this->paginatedResponse($userLeads);
     }
 
     public function show(UserLead $userLead): JsonResponse

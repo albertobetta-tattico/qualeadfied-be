@@ -11,7 +11,7 @@ class AdminActivityLogController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $query = AdminActivityLog::query();
+        $query = AdminActivityLog::with('admin');
 
         if ($request->filled('admin_id')) {
             $query->where('admin_id', $request->input('admin_id'));
@@ -25,9 +25,19 @@ class AdminActivityLogController extends Controller
             $query->where('entity', $request->input('entity'));
         }
 
-        $logs = $query->orderByDesc('created_at')
-            ->paginate(15);
+        if ($request->filled('date_from')) {
+            $query->where('created_at', '>=', $request->input('date_from'));
+        }
 
-        return response()->json($logs);
+        if ($request->filled('date_to')) {
+            $query->where('created_at', '<=', $request->input('date_to'));
+        }
+
+        $sortBy = $request->input('sort_by', 'created_at');
+        $sortOrder = $request->input('sort_order', 'desc');
+        $query->orderBy($sortBy, $sortOrder);
+
+        $perPage = $request->input('per_page', 20);
+        return $this->paginatedResponse($query->paginate($perPage));
     }
 }

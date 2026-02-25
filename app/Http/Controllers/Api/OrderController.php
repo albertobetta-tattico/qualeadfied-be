@@ -19,18 +19,45 @@ class OrderController extends Controller
             $query->where('user_id', $user->id);
         }
 
-        $orders = $query->with('items')
-            ->orderByDesc('created_at')
-            ->paginate(15);
+        $query->with(['user.clientProfile', 'items']);
 
-        return response()->json($orders);
+        if ($request->filled('search')) {
+            $query->where('order_number', 'like', '%'.$request->input('search').'%');
+        }
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->input('status'));
+        }
+
+        if ($request->filled('type')) {
+            $query->where('type', $request->input('type'));
+        }
+
+        if ($request->filled('payment_method')) {
+            $query->where('payment_method', $request->input('payment_method'));
+        }
+
+        if ($request->filled('date_from')) {
+            $query->where('created_at', '>=', $request->input('date_from'));
+        }
+
+        if ($request->filled('date_to')) {
+            $query->where('created_at', '<=', $request->input('date_to'));
+        }
+
+        $sortBy = $request->input('sort_by', 'created_at');
+        $sortOrder = $request->input('sort_order', 'desc');
+        $query->orderBy($sortBy, $sortOrder);
+
+        $perPage = $request->input('per_page', 20);
+        return $this->paginatedResponse($query->paginate($perPage));
     }
 
     public function show(Order $order): JsonResponse
     {
-        $order->load(['items', 'invoice']);
+        $order->load(['user.clientProfile', 'items', 'invoice', 'transactions']);
 
-        return response()->json(['order' => $order]);
+        return response()->json(['data' => $order]);
     }
 
     public function store(Request $request): JsonResponse
@@ -84,8 +111,26 @@ class OrderController extends Controller
             'total' => $subtotal + $vatAmount,
         ]);
 
-        $order->load('items');
+        $order->load(['user.clientProfile', 'items']);
 
-        return response()->json(['order' => $order], 201);
+        return response()->json(['data' => $order], 201);
+    }
+
+    public function stats(): JsonResponse
+    {
+        $totalRevenue = Order::where('status', 'paid')->sum('total');
+        $totalOrders = Order::count();
+
+        return response()->json(['data' => [
+            'total' => $totalOrders,
+            'pending' => Order::where('status', 'pending')->count(),
+            'processing' => Order::where('status', 'processing')->count(),
+            'paid' => Order::where('status', 'paid')->count(),
+            'completed' => Order::where('status', 'completed')->count(),
+            'failed' => Order::where('status', 'failed')->count(),
+            'refunded' => Order::where('status', 'refunded')->count(),
+            'cancelled' => Order::where('status', 'cancelled')->count(),
+            'total_revenue' => round((float) $totalRevenue, 2),
+        ]]);
     }
 }

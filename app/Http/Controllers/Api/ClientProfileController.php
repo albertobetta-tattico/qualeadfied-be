@@ -13,7 +13,7 @@ class ClientProfileController extends Controller
     {
         $profiles = ClientProfile::with('user')->paginate(15);
 
-        return response()->json($profiles);
+        return $this->paginatedResponse($profiles);
     }
 
     public function show(Request $request, ?ClientProfile $clientProfile = null): JsonResponse

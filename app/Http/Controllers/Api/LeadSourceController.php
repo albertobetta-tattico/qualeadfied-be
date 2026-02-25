@@ -6,19 +6,37 @@ use App\Http\Controllers\Controller;
 use App\Models\LeadSource;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 class LeadSourceController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $sources = LeadSource::paginate(15);
+        $query = LeadSource::query();
 
-        return response()->json($sources);
+        if ($request->filled('search')) {
+            $search = $request->input('search');
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', '%'.$search.'%')
+                  ->orWhere('slug', 'like', '%'.$search.'%');
+            });
+        }
+
+        if ($request->has('is_active') && $request->input('is_active') !== '') {
+            $query->where('is_active', filter_var($request->input('is_active'), FILTER_VALIDATE_BOOLEAN));
+        }
+
+        $sortBy = $request->input('sort_by', 'created_at');
+        $sortOrder = $request->input('sort_order', 'desc');
+        $query->orderBy($sortBy, $sortOrder);
+
+        $perPage = $request->input('per_page', 20);
+        return $this->paginatedResponse($query->paginate($perPage));
     }
 
     public function show(LeadSource $leadSource): JsonResponse
     {
-        return response()->json(['lead_source' => $leadSource]);
+        return response()->json(['data' => $leadSource]);
     }
 
     public function store(Request $request): JsonResponse
@@ -34,7 +52,7 @@ class LeadSourceController extends Controller
 
         $source = LeadSource::create($validated);
 
-        return response()->json(['lead_source' => $source], 201);
+        return response()->json(['data' => $source], 201);
     }
 
     public function update(Request $request, LeadSource $leadSource): JsonResponse
@@ -50,7 +68,7 @@ class LeadSourceController extends Controller
 
         $leadSource->update($validated);
 
-        return response()->json(['lead_source' => $leadSource]);
+        return response()->json(['data' => $leadSource]);
     }
 
     public function destroy(LeadSource $leadSource): JsonResponse
@@ -58,5 +76,13 @@ class LeadSourceController extends Controller
         $leadSource->delete();
 
         return response()->json(null, 204);
+    }
+
+    public function regenerateKey(LeadSource $leadSource): JsonResponse
+    {
+        $leadSource->update(['api_key' => Str::uuid()->toString()]);
+
+        // Make api_key visible for this response since it was just regenerated
+        return response()->json(['data' => $leadSource->makeVisible('api_key')]);
     }
 }
