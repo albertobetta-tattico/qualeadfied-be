@@ -11,15 +11,14 @@ class SystemSettingController extends Controller
 {
     public function index(): JsonResponse
     {
-        $settings = SystemSetting::all();
-
+        // Return all settings as a flat key-value object
+        $settings = SystemSetting::all()->pluck('value', 'key');
         return response()->json(['data' => $settings]);
     }
 
     public function show(string $key): JsonResponse
     {
         $setting = SystemSetting::where('key', $key)->firstOrFail();
-
         return response()->json(['data' => $setting]);
     }
 
@@ -31,7 +30,24 @@ class SystemSettingController extends Controller
 
         $setting = SystemSetting::where('key', $key)->firstOrFail();
         $setting->update(['value' => $validated['value']]);
-
         return response()->json(['data' => $setting]);
+    }
+
+    /**
+     * Bulk update all system settings.
+     */
+    public function bulkUpdate(Request $request): JsonResponse
+    {
+        $settings = $request->all();
+
+        foreach ($settings as $key => $value) {
+            SystemSetting::updateOrCreate(
+                ['key' => $key],
+                ['value' => is_array($value) ? json_encode($value) : (string) $value]
+            );
+        }
+
+        $allSettings = SystemSetting::all()->pluck('value', 'key');
+        return response()->json(['data' => $allSettings]);
     }
 }

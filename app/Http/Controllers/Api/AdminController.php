@@ -82,4 +82,15 @@ class AdminController extends Controller
 
         return response()->json(null, 204);
     }
+
+    public function resetPassword(Admin $admin): JsonResponse
+    {
+        $newPassword = \Illuminate\Support\Str::random(12);
+        $admin->update(['password' => \Illuminate\Support\Facades\Hash::make($newPassword)]);
+
+        return response()->json(['data' => [
+            'message' => 'Password has been reset successfully.',
+            'temporary_password' => $newPassword,
+        ]]);
+    }
 }

@@ -88,11 +88,16 @@ class CategoryController extends Controller
 
     public function stats(): JsonResponse
     {
+        $totalLeads = \App\Models\Lead::count();
+        $availableLeads = \App\Models\Lead::where('status', 'free')->count();
+
         return response()->json(['data' => [
             'total' => Category::count(),
             'active' => Category::where('is_active', true)->count(),
             'inactive' => Category::where('is_active', false)->count(),
             'with_leads' => Category::has('leads')->count(),
+            'total_leads' => $totalLeads,
+            'available_leads' => $availableLeads,
         ]]);
     }
 }

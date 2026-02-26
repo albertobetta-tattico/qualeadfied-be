@@ -118,19 +118,33 @@ class OrderController extends Controller
 
     public function stats(): JsonResponse
     {
-        $totalRevenue = Order::where('status', 'paid')->sum('total');
-        $totalOrders = Order::count();
+        $now = \Carbon\Carbon::now();
+        $totalRevenue = Order::whereIn('status', ['paid', 'completed'])->sum('total');
 
         return response()->json(['data' => [
-            'total' => $totalOrders,
-            'pending' => Order::where('status', 'pending')->count(),
-            'processing' => Order::where('status', 'processing')->count(),
-            'paid' => Order::where('status', 'paid')->count(),
-            'completed' => Order::where('status', 'completed')->count(),
-            'failed' => Order::where('status', 'failed')->count(),
-            'refunded' => Order::where('status', 'refunded')->count(),
-            'cancelled' => Order::where('status', 'cancelled')->count(),
+            'total_orders' => Order::count(),
             'total_revenue' => round((float) $totalRevenue, 2),
+            'orders_today' => Order::whereDate('created_at', $now->toDateString())->count(),
+            'revenue_today' => round((float) Order::whereDate('created_at', $now->toDateString())->whereIn('status', ['paid', 'completed'])->sum('total'), 2),
+            'orders_this_week' => Order::where('created_at', '>=', $now->copy()->startOfWeek())->count(),
+            'revenue_this_week' => round((float) Order::where('created_at', '>=', $now->copy()->startOfWeek())->whereIn('status', ['paid', 'completed'])->sum('total'), 2),
+            'orders_this_month' => Order::where('created_at', '>=', $now->copy()->startOfMonth())->count(),
+            'revenue_this_month' => round((float) Order::where('created_at', '>=', $now->copy()->startOfMonth())->whereIn('status', ['paid', 'completed'])->sum('total'), 2),
+            'orders_by_status' => [
+                'pending' => Order::where('status', 'pending')->count(),
+                'processing' => Order::where('status', 'processing')->count(),
+                'paid' => Order::where('status', 'paid')->count(),
+                'completed' => Order::where('status', 'completed')->count(),
+                'failed' => Order::where('status', 'failed')->count(),
+                'refunded' => Order::where('status', 'refunded')->count(),
+                'cancelled' => Order::where('status', 'cancelled')->count(),
+            ],
+            'orders_by_type' => [
+                'single' => Order::where('type', 'single')->count(),
+                'package' => Order::where('type', 'package')->count(),
+                'free_trial' => Order::where('type', 'free_trial')->count(),
+            ],
+            'avg_order_value' => round((float) (Order::whereIn('status', ['paid', 'completed'])->avg('total') ?? 0), 2),
         ]]);
     }
 }

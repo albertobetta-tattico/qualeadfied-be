@@ -22,6 +22,7 @@ use App\Http\Controllers\Api\ProvinceController;
 use App\Http\Controllers\Api\PublicCatalogController;
 use App\Http\Controllers\Api\PublicLeadSubmissionController;
 use App\Http\Controllers\Api\ReportController;
+use App\Http\Controllers\Api\SettingsController;
 use App\Http\Controllers\Api\SystemSettingController;
 use App\Http\Controllers\Api\TransactionController;
 use App\Http\Controllers\Api\UserController;
@@ -189,8 +190,21 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
     // Activity logs (read-only)
     Route::get('/activity-logs', [AdminActivityLogController::class, 'index']);
 
-    // System settings
+    // System settings - bulk update (BEFORE the key-specific routes)
     Route::get('/system-settings', [SystemSettingController::class, 'index']);
+    Route::put('/system-settings', [SystemSettingController::class, 'bulkUpdate']);
     Route::get('/system-settings/{key}', [SystemSettingController::class, 'show']);
     Route::put('/system-settings/{key}', [SystemSettingController::class, 'update']);
+
+    // Settings stubs (notifications, SMTP, Fatture in Cloud)
+    Route::get('/settings/notifications', [SettingsController::class, 'notifications']);
+    Route::put('/settings/notifications/{categoryId}', [SettingsController::class, 'updateNotification']);
+    Route::put('/settings/smtp', [SettingsController::class, 'updateSmtp']);
+    Route::post('/settings/test-email', [SettingsController::class, 'testEmail']);
+    Route::get('/settings/fatture-cloud', [SettingsController::class, 'fattureCloudConfig']);
+    Route::put('/settings/fatture-cloud', [SettingsController::class, 'updateFattureCloudConfig']);
+    Route::post('/settings/fatture-cloud/test', [SettingsController::class, 'testFattureCloudConnection']);
+
+    // Admin reset password
+    Route::post('/admins/{admin}/reset-password', [AdminController::class, 'resetPassword']);
 });

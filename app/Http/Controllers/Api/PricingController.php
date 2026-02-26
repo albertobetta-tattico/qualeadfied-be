@@ -106,15 +106,20 @@ class PricingController extends Controller
      */
     public function stats(): JsonResponse
     {
-        $currentPrices = CategoryPrice::whereNull('valid_to');
-        $categoriesWithPrices = $currentPrices->distinct('category_id')->count('category_id');
+        $totalCategories = Category::where('is_active', true)->count();
+        $categoriesWithPrices = CategoryPrice::whereNull('valid_to')
+            ->distinct('category_id')
+            ->count('category_id');
         $avgExclusivePrice = CategoryPrice::whereNull('valid_to')->avg('exclusive_price');
+        $lastPriceChange = CategoryPrice::latest('created_at')->value('created_at');
 
         return response()->json(['data' => [
+            'total_categories' => $totalCategories,
             'categories_with_prices' => $categoriesWithPrices,
+            'categories_without_prices' => $totalCategories - $categoriesWithPrices,
             'avg_exclusive_price' => round((float) ($avgExclusivePrice ?? 0), 2),
             'total_price_changes' => CategoryPrice::count(),
-            'active_prices' => CategoryPrice::whereNull('valid_to')->count(),
+            'last_price_change' => $lastPriceChange,
         ]]);
     }
 }

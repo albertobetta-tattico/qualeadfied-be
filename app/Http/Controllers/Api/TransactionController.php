@@ -54,15 +54,35 @@ class TransactionController extends Controller
 
     public function stats(): JsonResponse
     {
-        $totalAmount = Transaction::where('status', 'succeeded')->sum('amount');
+        $now = \Carbon\Carbon::now();
+        $succeededVolume = Transaction::where('status', 'succeeded')->sum('amount');
+        $totalVolume = Transaction::sum('amount');
+        $totalCount = Transaction::count();
+        $succeededCount = Transaction::where('status', 'succeeded')->count();
+        $failedCount = Transaction::where('status', 'failed')->count();
+        $pendingCount = Transaction::whereIn('status', ['pending', 'processing', 'requires_action'])->count();
 
         return response()->json(['data' => [
-            'total' => Transaction::count(),
-            'succeeded' => Transaction::where('status', 'succeeded')->count(),
-            'pending' => Transaction::where('status', 'pending')->count(),
-            'failed' => Transaction::where('status', 'failed')->count(),
-            'refunded' => Transaction::where('status', 'refunded')->count(),
-            'total_amount' => round((float) $totalAmount, 2),
+            'total_transactions' => $totalCount,
+            'total_volume' => round((float) $totalVolume, 2),
+            'successful_count' => $succeededCount,
+            'successful_volume' => round((float) $succeededVolume, 2),
+            'failed_count' => $failedCount,
+            'failed_volume' => round((float) Transaction::where('status', 'failed')->sum('amount'), 2),
+            'pending_count' => $pendingCount,
+            'pending_volume' => round((float) Transaction::whereIn('status', ['pending', 'processing', 'requires_action'])->sum('amount'), 2),
+            'transactions_today' => Transaction::whereDate('created_at', $now->toDateString())->count(),
+            'volume_today' => round((float) Transaction::whereDate('created_at', $now->toDateString())->where('status', 'succeeded')->sum('amount'), 2),
+            'transactions_this_week' => Transaction::where('created_at', '>=', $now->copy()->startOfWeek())->count(),
+            'volume_this_week' => round((float) Transaction::where('created_at', '>=', $now->copy()->startOfWeek())->where('status', 'succeeded')->sum('amount'), 2),
+            'transactions_this_month' => Transaction::where('created_at', '>=', $now->copy()->startOfMonth())->count(),
+            'volume_this_month' => round((float) Transaction::where('created_at', '>=', $now->copy()->startOfMonth())->where('status', 'succeeded')->sum('amount'), 2),
+            'success_rate' => $totalCount > 0 ? round(($succeededCount / $totalCount) * 100, 1) : 0,
+            'by_payment_type' => [
+                'card' => Transaction::where('payment_type', 'card')->count(),
+                'bank_transfer' => Transaction::where('payment_type', 'bank_transfer')->count(),
+                'sepa_debit' => Transaction::where('payment_type', 'sepa_debit')->count(),
+            ],
         ]]);
     }
 }
