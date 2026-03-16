@@ -29,6 +29,7 @@ class DatabaseSeeder extends Seeder
             LeadSaleSeeder::class,
             SystemSettingSeeder::class,
             AdminActivityLogSeeder::class,
+            TestUserDashboardSeeder::class,
         ]);
     }
 }

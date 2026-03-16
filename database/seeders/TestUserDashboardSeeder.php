@@ -23,8 +23,49 @@ class TestUserDashboardSeeder extends Seeder
 {
     public function run(): void
     {
-        $user = User::where('email', 'test@qualeadfied.com')->firstOrFail();
+        // Create or update test user
+        $user = User::updateOrCreate(
+            ['email' => 'test@qualeadfied.com'],
+            [
+                'password' => 'password',
+                'role' => 'client',
+                'status' => 'active',
+                'email_verified_at' => now(),
+            ]
+        );
+
+        // Create or update client profile
+        \App\Models\ClientProfile::updateOrCreate(
+            ['user_id' => $user->id],
+            [
+                'company_name' => 'Test Company S.r.l.',
+                'vat_number' => 'IT12345678901',
+                'phone' => '+39 02 9999999',
+                'first_name' => 'Test',
+                'last_name' => 'User',
+                'billing_address' => 'Via Roma 1',
+                'billing_city' => 'Milano',
+                'billing_province' => 'MI',
+                'billing_zip' => '20100',
+                'billing_country' => 'IT',
+                'sdi_code' => 'TEST123',
+                'pec_email' => 'test@pec.it',
+                'free_trial_enabled' => true,
+                'free_trial_leads_remaining' => 3,
+                'email_notifications_enabled' => true,
+                'marketing_consent' => true,
+            ]
+        );
+
         $userId = $user->id;
+
+        // Clean up existing test data for idempotency
+        UserLead::where('user_id', $userId)->delete();
+        CartItem::where('user_id', $userId)->delete();
+        ClientNotification::where('user_id', $userId)->delete();
+        $existingOrders = Order::where('user_id', $userId)->pluck('id');
+        OrderItem::whereIn('order_id', $existingOrders)->delete();
+        Order::where('user_id', $userId)->delete();
 
         // Get some leads for our test data
         $freeLeads = Lead::where('status', 'free')->limit(20)->get();
@@ -332,7 +373,8 @@ class TestUserDashboardSeeder extends Seeder
             'created_at' => now()->subMinutes(30),
         ]);
 
-        // Update trial: 1 lead claimed, 2 remaining
+        // Update trial: after claiming 1 lead, 2 remaining
+        $user->load('clientProfile');
         $user->clientProfile->update([
             'free_trial_leads_remaining' => 2,
         ]);
