@@ -2,3 +2,4 @@
 docker compose up -d  
 
 # git
+php artisan serve
