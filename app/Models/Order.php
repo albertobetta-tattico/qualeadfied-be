@@ -13,6 +13,13 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 class Order extends Model
 {
     /**
+     * The accessors to append to the model's array form.
+     *
+     * @var list<string>
+     */
+    protected $appends = ['order_type'];
+
+    /**
      * The attributes that are mass assignable.
      *
      * @var list<string>
@@ -52,6 +59,14 @@ class Order extends Model
             'billing_snapshot' => 'array',
             'paid_at' => 'datetime',
         ];
+    }
+
+    /**
+     * Alias for 'type' – frontend uses 'order_type'.
+     */
+    public function getOrderTypeAttribute(): ?string
+    {
+        return $this->type?->value ?? $this->attributes['type'] ?? null;
     }
 
     /**

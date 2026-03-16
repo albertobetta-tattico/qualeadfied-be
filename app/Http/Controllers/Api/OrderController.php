@@ -19,7 +19,7 @@ class OrderController extends Controller
             $query->where('user_id', $user->id);
         }
 
-        $query->with(['user.clientProfile', 'items']);
+        $query->with(['user.clientProfile', 'items'])->withCount('items');
 
         if ($request->filled('search')) {
             $query->where('order_number', 'like', '%'.$request->input('search').'%');
@@ -29,8 +29,9 @@ class OrderController extends Controller
             $query->where('status', $request->input('status'));
         }
 
-        if ($request->filled('type')) {
-            $query->where('type', $request->input('type'));
+        if ($request->filled('type') || $request->filled('order_type')) {
+            $type = $request->input('type') ?? $request->input('order_type');
+            $query->where('type', $type);
         }
 
         if ($request->filled('payment_method')) {
@@ -53,11 +54,47 @@ class OrderController extends Controller
         return $this->paginatedResponse($query->paginate($perPage));
     }
 
-    public function show(Order $order): JsonResponse
+    public function show(Request $request, Order $order): JsonResponse
     {
-        $order->load(['user.clientProfile', 'items', 'invoice', 'transactions']);
+        $order->load(['user.clientProfile', 'items.lead.category', 'items.lead.province', 'invoice', 'transactions']);
 
-        return response()->json(['data' => $order]);
+        $data = $order->toArray();
+
+        // Add billing_data from snapshot or profile
+        $data['billing_data'] = $order->billing_snapshot ?? [
+            'company_name' => $order->user?->clientProfile?->company_name ?? '',
+            'vat_number' => $order->user?->clientProfile?->vat_number ?? '',
+            'address' => $order->user?->clientProfile?->billing_address ?? '',
+            'city' => $order->user?->clientProfile?->billing_city ?? '',
+            'province' => $order->user?->clientProfile?->billing_province ?? '',
+            'zip' => $order->user?->clientProfile?->billing_zip ?? '',
+            'country' => $order->user?->clientProfile?->billing_country ?? 'IT',
+            'sdi_code' => $order->user?->clientProfile?->sdi_code,
+            'pec_email' => $order->user?->clientProfile?->pec_email,
+        ];
+
+        return response()->json(['data' => $data]);
+    }
+
+    public function invoice(Request $request, Order $order): JsonResponse
+    {
+        $user = $request->user();
+
+        // Ensure client can only access their own orders
+        if ($user->role?->value === 'client' && $order->user_id !== $user->id) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        if (!$order->invoice_url) {
+            $invoice = $order->invoice;
+            if (!$invoice) {
+                return response()->json(['message' => 'Invoice not available'], 404);
+            }
+        }
+
+        return response()->json(['data' => [
+            'url' => $order->invoice_url ?? $order->invoice?->url ?? null,
+        ]]);
     }
 
     public function store(Request $request): JsonResponse

@@ -7,7 +7,12 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CartItemController;
 use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\CategoryPriceController;
+use App\Http\Controllers\Api\CheckoutController;
+use App\Http\Controllers\Api\ClientDashboardController;
+use App\Http\Controllers\Api\ClientNotificationController;
+use App\Http\Controllers\Api\ClientPackageController;
 use App\Http\Controllers\Api\ClientProfileController;
+use App\Http\Controllers\Api\ClientTrialController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\InvoiceController;
 use App\Http\Controllers\Api\LeadController;
@@ -50,6 +55,7 @@ Route::prefix('auth')->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
     Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
     Route::post('/reset-password', [AuthController::class, 'resetPassword']);
+    Route::post('/verify-email', [AuthController::class, 'verifyEmail']);
 });
 
 // Admin authentication (public - no auth required)
@@ -64,6 +70,9 @@ Route::prefix('public')->group(function () {
     Route::post('/lead-submissions', [PublicLeadSubmissionController::class, 'store']);
 });
 
+// Public packages list (no auth required)
+Route::get('/packages', [ClientPackageController::class, 'index']);
+
 // ──────────────────────────────────────────────────────────────────────────
 // Authenticated routes (auth:sanctum)
 // ──────────────────────────────────────────────────────────────────────────
@@ -74,7 +83,26 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::get('/auth/me', [AuthController::class, 'me']);
 
-    // User leads (portfolio)
+    // Client dashboard
+    Route::prefix('client')->group(function () {
+        Route::get('/dashboard/stats', [ClientDashboardController::class, 'stats']);
+        Route::get('/dashboard/recent-leads', [ClientDashboardController::class, 'recentLeads']);
+        Route::get('/dashboard/recent-orders', [ClientDashboardController::class, 'recentOrders']);
+
+        Route::get('/notifications', [ClientNotificationController::class, 'index']);
+        Route::post('/notifications/{notification}/read', [ClientNotificationController::class, 'markRead']);
+        Route::post('/notifications/read-all', [ClientNotificationController::class, 'markAllRead']);
+
+        Route::get('/trial/status', [ClientTrialController::class, 'status']);
+        Route::post('/trial/claim', [ClientTrialController::class, 'claim']);
+
+        Route::put('/profile/billing', [ClientProfileController::class, 'updateBilling']);
+        Route::put('/profile/password', [ClientProfileController::class, 'changePassword']);
+        Route::put('/profile/preferences', [ClientProfileController::class, 'updatePreferences']);
+    });
+
+    // User leads (portfolio) - export BEFORE parametric route
+    Route::get('/user-leads/export', [UserLeadController::class, 'export']);
     Route::get('/user-leads', [UserLeadController::class, 'index']);
     Route::get('/user-leads/{userLead}', [UserLeadController::class, 'show']);
     Route::put('/user-leads/{userLead}', [UserLeadController::class, 'update']);
@@ -86,12 +114,24 @@ Route::middleware('auth:sanctum')->group(function () {
     // Cart
     Route::get('/cart', [CartItemController::class, 'index']);
     Route::post('/cart', [CartItemController::class, 'store']);
+    Route::put('/cart/{cartItem}', [CartItemController::class, 'update']);
     Route::delete('/cart/{cartItem}', [CartItemController::class, 'destroy']);
+    Route::post('/cart/remove-batch', [CartItemController::class, 'removeBatch']);
+    Route::delete('/cart', [CartItemController::class, 'clearAll']);
+
+    // Checkout
+    Route::post('/checkout', [CheckoutController::class, 'create']);
+    Route::post('/checkout/confirm', [CheckoutController::class, 'confirm']);
 
     // Orders
     Route::get('/orders', [OrderController::class, 'index']);
     Route::post('/orders', [OrderController::class, 'store']);
     Route::get('/orders/{order}', [OrderController::class, 'show']);
+    Route::get('/orders/{order}/invoice', [OrderController::class, 'invoice']);
+
+    // Package purchase & selection
+    Route::post('/packages/purchase', [ClientPackageController::class, 'purchase']);
+    Route::post('/packages/{package}/select-leads', [ClientPackageController::class, 'selectLeads']);
 
     // Notification settings
     Route::get('/notification-settings', [NotificationSettingController::class, 'index']);

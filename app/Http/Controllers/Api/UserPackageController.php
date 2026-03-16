@@ -16,7 +16,7 @@ class UserPackageController extends Controller
             ->orderByDesc('purchased_at')
             ->get();
 
-        return response()->json(['user_packages' => $packages]);
+        return response()->json(['data' => $packages]);
     }
 
     public function show(Request $request, UserPackage $userPackage): JsonResponse
@@ -31,8 +31,7 @@ class UserPackageController extends Controller
         ];
 
         return response()->json([
-            'user_package' => $userPackage,
-            'usage_stats' => $stats,
+            'data' => array_merge($userPackage->toArray(), ['usage_stats' => $stats]),
         ]);
     }
 }

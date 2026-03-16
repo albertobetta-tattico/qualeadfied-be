@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\ClientProfile;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,6 +17,12 @@ class AuthController extends Controller
         $validated = $request->validate([
             'email' => ['required', 'email', 'unique:users,email'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
+            'company_name' => ['sometimes', 'string', 'max:255'],
+            'vat_number' => ['sometimes', 'string', 'max:50'],
+            'phone' => ['sometimes', 'string', 'max:50'],
+            'first_name' => ['sometimes', 'string', 'max:100'],
+            'last_name' => ['sometimes', 'string', 'max:100'],
+            'marketing_consent' => ['sometimes', 'boolean'],
         ]);
 
         $user = User::create([
@@ -23,6 +30,21 @@ class AuthController extends Controller
             'password' => Hash::make($validated['password']),
             'role' => 'client',
             'status' => 'pending',
+        ]);
+
+        // Create a ClientProfile for the new user
+        ClientProfile::create([
+            'user_id' => $user->id,
+            'company_name' => $validated['company_name'] ?? '',
+            'vat_number' => $validated['vat_number'] ?? '',
+            'phone' => $validated['phone'] ?? '',
+            'first_name' => $validated['first_name'] ?? '',
+            'last_name' => $validated['last_name'] ?? '',
+            'billing_country' => 'IT',
+            'free_trial_enabled' => true,
+            'free_trial_leads_remaining' => (int) config('app.free_trial_leads', 3),
+            'email_notifications_enabled' => true,
+            'marketing_consent' => $validated['marketing_consent'] ?? false,
         ]);
 
         return response()->json([
@@ -51,9 +73,15 @@ class AuthController extends Controller
         $user = Auth::user();
         $token = $user->createToken('api-token')->plainTextToken;
 
+        // Load profile and alias as 'profile' for frontend compatibility
+        $user->load('clientProfile');
+        $userData = $user->toArray();
+        $userData['profile'] = $userData['client_profile'] ?? null;
+        unset($userData['client_profile']);
+
         return response()->json([
             'message' => 'Login successful.',
-            'user' => $user,
+            'user' => $userData,
             'token' => $token,
         ]);
     }
@@ -72,8 +100,15 @@ class AuthController extends Controller
      */
     public function me(Request $request): JsonResponse
     {
+        $user = $request->user();
+        $user->load('clientProfile');
+
+        $userData = $user->toArray();
+        $userData['profile'] = $userData['client_profile'] ?? null;
+        unset($userData['client_profile']);
+
         return response()->json([
-            'user' => $request->user(),
+            'user' => $userData,
         ]);
     }
 
@@ -100,6 +135,18 @@ class AuthController extends Controller
         // Password reset logic will be implemented with tokens
         return response()->json([
             'message' => 'Password has been reset successfully.',
+        ]);
+    }
+
+    public function verifyEmail(Request $request): JsonResponse
+    {
+        $request->validate([
+            'token' => ['required', 'string'],
+        ]);
+
+        // Email verification will be implemented with signed URLs
+        return response()->json([
+            'message' => 'Email verified successfully.',
         ]);
     }
 }

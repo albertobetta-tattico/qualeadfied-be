@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ClientProfile;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 
 class ClientProfileController extends Controller
 {
@@ -25,7 +26,7 @@ class ClientProfileController extends Controller
 
         $clientProfile->load('user');
 
-        return response()->json(['client_profile' => $clientProfile]);
+        return response()->json(['data' => $clientProfile]);
     }
 
     public function store(Request $request): JsonResponse
@@ -48,7 +49,7 @@ class ClientProfileController extends Controller
 
         $profile = ClientProfile::create($validated);
 
-        return response()->json(['client_profile' => $profile], 201);
+        return response()->json(['data' => $profile], 201);
     }
 
     public function update(Request $request, ?ClientProfile $clientProfile = null): JsonResponse
@@ -77,6 +78,61 @@ class ClientProfileController extends Controller
 
         $clientProfile->update($validated);
 
-        return response()->json(['client_profile' => $clientProfile]);
+        return response()->json(['data' => $clientProfile]);
+    }
+
+    public function updateBilling(Request $request): JsonResponse
+    {
+        $profile = ClientProfile::where('user_id', $request->user()->id)->firstOrFail();
+
+        $validated = $request->validate([
+            'billing_address' => ['required', 'string', 'max:255'],
+            'billing_city' => ['required', 'string', 'max:100'],
+            'billing_province' => ['required', 'string', 'max:10'],
+            'billing_zip' => ['required', 'string', 'max:10'],
+            'billing_country' => ['required', 'string', 'max:5'],
+            'sdi_code' => ['nullable', 'string', 'max:10'],
+            'pec_email' => ['nullable', 'email', 'max:255'],
+        ]);
+
+        $profile->update($validated);
+
+        return response()->json(['message' => 'Billing data updated']);
+    }
+
+    public function changePassword(Request $request): JsonResponse
+    {
+        $request->validate([
+            'current_password' => ['required', 'string'],
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
+        ]);
+
+        $user = $request->user();
+
+        if (!Hash::check($request->current_password, $user->password)) {
+            return response()->json([
+                'message' => 'Current password is incorrect',
+            ], 422);
+        }
+
+        $user->update([
+            'password' => Hash::make($request->password),
+        ]);
+
+        return response()->json(['message' => 'Password updated successfully']);
+    }
+
+    public function updatePreferences(Request $request): JsonResponse
+    {
+        $profile = ClientProfile::where('user_id', $request->user()->id)->firstOrFail();
+
+        $validated = $request->validate([
+            'email_notifications_enabled' => ['sometimes', 'boolean'],
+            'marketing_consent' => ['sometimes', 'boolean'],
+        ]);
+
+        $profile->update($validated);
+
+        return response()->json(['message' => 'Preferences updated']);
     }
 }
