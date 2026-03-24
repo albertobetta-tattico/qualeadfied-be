@@ -46,6 +46,18 @@ class LeadController extends Controller
             $query->where('created_at', '<=', $request->input('date_to'));
         }
 
+        if ($request->filled('country')) {
+            $query->where('country', $request->input('country'));
+        }
+
+        if ($request->filled('medium')) {
+            $query->where('medium', 'like', '%'.$request->input('medium').'%');
+        }
+
+        if ($request->filled('campaign')) {
+            $query->where('campaign', 'like', '%'.$request->input('campaign').'%');
+        }
+
         $sortBy = $request->input('sort_by', 'created_at');
         $sortOrder = $request->input('sort_order', 'desc');
         $query->orderBy($sortBy, $sortOrder);
@@ -79,6 +91,9 @@ class LeadController extends Controller
             'extra_tags' => ['nullable', 'array'],
             'generated_at' => ['sometimes', 'date'],
             'external_id' => ['nullable', 'string', 'max:255'],
+            'medium' => ['nullable', 'string', 'max:100'],
+            'campaign' => ['nullable', 'string', 'max:255'],
+            'country' => ['sometimes', 'string', 'size:2'],
         ]);
 
         $validated['status'] = 'free';
@@ -102,6 +117,9 @@ class LeadController extends Controller
             'phone' => ['sometimes', 'string', 'max:50'],
             'request_text' => ['sometimes', 'string'],
             'extra_tags' => ['nullable', 'array'],
+            'medium' => ['nullable', 'string', 'max:100'],
+            'campaign' => ['nullable', 'string', 'max:255'],
+            'country' => ['sometimes', 'string', 'size:2'],
         ]);
 
         $lead->update($validated);

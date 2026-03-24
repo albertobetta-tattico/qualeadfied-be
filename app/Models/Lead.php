@@ -28,6 +28,9 @@ class Lead extends Model
         'current_shares',
         'generated_at',
         'external_id',
+        'medium',
+        'campaign',
+        'country',
     ];
 
     /**

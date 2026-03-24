@@ -131,6 +131,16 @@ class LeadSeeder extends Seeder
         // Based on insert order: 1=TO, 10=MI, 15=VE, 17=PD, 25=GE, 29=BO, 39=FI, 56=RM, 63=NA, 68=BA, 82=PA, 85=CT, 93=CA
         $bigCityProvinceIds = [1, 10, 15, 17, 25, 29, 39, 56, 63, 68, 82, 85, 93];
 
+        // Media di acquisizione (mezzo)
+        $mediaOptions = ['cpc', 'organic', 'social', 'email', 'referral', 'display', null, null, null];
+
+        // Campagne di acquisizione
+        $campaignOptions = [
+            'fotovoltaico-primavera-2026', 'risparmio-energetico-q1', 'lead-gen-facebook-marzo',
+            'google-search-infissi', 'campagna-caldaie-inverno', 'remarketing-q1-2026',
+            null, null, null, null, null,
+        ];
+
         // Source weights: 1=Sito Web (40%), 2=Facebook (30%), 3=Google (15%), 4=Referral (10%), 5=Manuale (5%)
         $sourceWeights = array_merge(
             array_fill(0, 8, 1),   // Sito Web x8
@@ -218,6 +228,9 @@ class LeadSeeder extends Seeder
                     'current_shares' => $currentShares,
                     'generated_at' => now()->subDays(rand(1, 90)),
                     'external_id' => $sourceId <= 3 ? 'EXT-' . strtoupper(substr(md5(rand()), 0, 8)) : null,
+                    'country' => 'IT',
+                    'medium' => $mediaOptions[array_rand($mediaOptions)],
+                    'campaign' => $campaignOptions[array_rand($campaignOptions)],
                 ]);
 
                 $leadIndex++;

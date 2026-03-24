@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\ClientPackageController;
 use App\Http\Controllers\Api\ClientProfileController;
 use App\Http\Controllers\Api\ClientTrialController;
 use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\ImportLeadController;
 use App\Http\Controllers\Api\InvoiceController;
 use App\Http\Controllers\Api\LeadController;
 use App\Http\Controllers\Api\LeadSaleController;
@@ -62,6 +63,12 @@ Route::prefix('auth')->group(function () {
 Route::prefix('admin/auth')->group(function () {
     Route::post('/login', [AdminAuthController::class, 'login']);
 });
+
+// ──────────────────────────────────────────────────────────────────────────
+// Import API (authenticated via X-Api-Key header, no Sanctum token)
+// ──────────────────────────────────────────────────────────────────────────
+
+Route::post('/import/lead', [ImportLeadController::class, 'store']);
 
 Route::prefix('public')->group(function () {
     Route::get('/leads', [PublicCatalogController::class, 'leads']);
