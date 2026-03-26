@@ -31,12 +31,15 @@ class LeadSourceController extends Controller
         $query->orderBy($sortBy, $sortOrder);
 
         $perPage = $request->input('per_page', 20);
-        return $this->paginatedResponse($query->paginate($perPage));
+        $paginated = $query->paginate($perPage);
+        $paginated->getCollection()->each->makeVisible('api_key');
+
+        return $this->paginatedResponse($paginated);
     }
 
     public function show(LeadSource $leadSource): JsonResponse
     {
-        return response()->json(['data' => $leadSource]);
+        return response()->json(['data' => $leadSource->makeVisible('api_key')]);
     }
 
     public function store(Request $request): JsonResponse
@@ -48,11 +51,17 @@ class LeadSourceController extends Controller
             'api_key' => ['nullable', 'string', 'unique:lead_sources,api_key'],
             'is_active' => ['sometimes', 'boolean'],
             'config' => ['nullable', 'array'],
+            'generate_api_key' => ['sometimes', 'boolean'],
         ]);
+
+        if (!empty($validated['generate_api_key'])) {
+            $validated['api_key'] = Str::uuid()->toString();
+        }
+        unset($validated['generate_api_key']);
 
         $source = LeadSource::create($validated);
 
-        return response()->json(['data' => $source], 201);
+        return response()->json(['data' => $source->makeVisible('api_key')], 201);
     }
 
     public function update(Request $request, LeadSource $leadSource): JsonResponse
