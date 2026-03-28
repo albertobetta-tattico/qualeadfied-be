@@ -17,7 +17,7 @@ class AdminSeeder extends Seeder
             [
                 'first_name' => 'Super',
                 'last_name' => 'Admin',
-                'password' => 'Passw0rd', // Cast 'hashed' in model handles hashing
+                'password' => 'Passw0rd!', // Cast 'hashed' in model handles hashing
                 'role' => 'super_admin',
                 'status' => 'active',
             ]
