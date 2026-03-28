@@ -16,20 +16,20 @@ class DatabaseSeeder extends Seeder
     {
         $this->call([
             AdminSeeder::class,
-            ProvinceSeeder::class,
-            CategorySeeder::class,
-            CategoryPriceSeeder::class,
-            LeadSourceSeeder::class,
             UserSeeder::class,
-            PackageSeeder::class,
-            LeadSeeder::class,
-            OrderSeeder::class,
-            InvoiceSeeder::class,
-            TransactionSeeder::class,
-            LeadSaleSeeder::class,
-            SystemSettingSeeder::class,
-            AdminActivityLogSeeder::class,
-            TestUserDashboardSeeder::class,
+            CategorySeeder::class,
+            // ProvinceSeeder::class,
+            // CategoryPriceSeeder::class,
+            // LeadSourceSeeder::class,
+            // PackageSeeder::class,
+            // LeadSeeder::class,
+            // OrderSeeder::class,
+            // InvoiceSeeder::class,
+            // TransactionSeeder::class,
+            // LeadSaleSeeder::class,
+            // SystemSettingSeeder::class,
+            // AdminActivityLogSeeder::class,
+            // TestUserDashboardSeeder::class,
         ]);
     }
 }
