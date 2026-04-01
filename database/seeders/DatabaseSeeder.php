@@ -14,13 +14,11 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
+        // I dati iniziali (admin, utente test, categorie, province) sono in:
+        // database/migrations/2026_03_31_000002_seed_initial_data.php
+
         $this->call([
-            AdminSeeder::class,
-            UserSeeder::class,
-            CategorySeeder::class,
-            // ProvinceSeeder::class,
             // CategoryPriceSeeder::class,
-            // LeadSourceSeeder::class,
             // PackageSeeder::class,
             // LeadSeeder::class,
             // OrderSeeder::class,

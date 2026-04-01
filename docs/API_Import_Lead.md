@@ -52,16 +52,21 @@ La chiave viene generata come UUID v4 (es. `a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 | Campo | Tipo | Obbl. | Max | Descrizione |
 |-------|------|-------|-----|-------------|
-| `first_name` | string | Si | 100 | Nome del contatto |
-| `last_name` | string | Si | 100 | Cognome del contatto |
+| `full_name` | string | Si | 200 | Nome e cognome del contatto (es. `Mario Rossi`) |
 | `email` | string | Si | 255 | Email del contatto (deve essere un indirizzo valido) |
 | `phone` | string | Si | 50 | Telefono del contatto |
+
+### Indirizzo (opzionale)
+
+| Campo | Tipo | Obbl. | Max | Descrizione |
+|-------|------|-------|-----|-------------|
+| `address` | string | No | 500 | Indirizzo completo in formato testo libero (es. `Via Roma 12, 20100 Milano`) |
 
 ### Classificazione (obbligatori)
 
 | Campo | Tipo | Obbl. | Max | Descrizione |
 |-------|------|-------|-----|-------------|
-| `category` | string | Si | 255 | Categoria merceologica: accetta lo **slug** (es. `fotovoltaico`) oppure il **nome** (es. `Fotovoltaico`). Deve corrispondere a una categoria attiva nel sistema. |
+| `category` | string | Si | 255 | Categoria merceologica: accetta lo **slug** (es. `fotovoltaico`) oppure il **nome** (es. `Fotovoltaico`). Se la categoria non esiste viene **creata automaticamente** con `is_active: true` e `max_shares: 3`. Restituisce 422 solo se la categoria esiste ma è inattiva. |
 | `province` | string | Si | 10 | Codice provincia italiano (es. `MI`, `RM`, `TO`, `NA`). Viene convertito automaticamente in maiuscolo. |
 | `country` | string | Si | 2 | Codice paese ISO 3166-1 alpha-2 (es. `IT`, `DE`, `FR`). Viene convertito automaticamente in maiuscolo. |
 
@@ -97,10 +102,10 @@ La chiave viene generata come UUID v4 (es. `a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 ```json
 {
-  "first_name": "Mario",
-  "last_name": "Rossi",
+  "full_name": "Mario Rossi",
   "email": "mario.rossi@gmail.com",
   "phone": "+39 333 1234567",
+  "address": "Via Roma 12, 20100 Milano",
   "category": "fotovoltaico",
   "province": "MI",
   "country": "IT",
@@ -109,7 +114,7 @@ La chiave viene generata come UUID v4 (es. `a1b2c3d4-e5f6-7890-abcd-ef1234567890
   "request_text": "Vorrei un preventivo per impianto fotovoltaico 6kW con accumulo per la mia villetta.",
   "external_id": "DELERA-00123",
   "extra_tags": ["urgente", "residenziale"],
-  "generated_at": "2026-03-24"
+  "generated_at": "2026-04-01"
 }
 ```
 
@@ -117,8 +122,7 @@ La chiave viene generata come UUID v4 (es. `a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 ```json
 {
-  "first_name": "Laura",
-  "last_name": "Bianchi",
+  "full_name": "Laura Bianchi",
   "email": "laura.bianchi@yahoo.it",
   "phone": "347 9876543",
   "category": "infissi",
@@ -126,6 +130,7 @@ La chiave viene generata come UUID v4 (es. `a1b2c3d4-e5f6-7890-abcd-ef1234567890
   "country": "IT"
 }
 ```
+
 
 ---
 
@@ -181,9 +186,9 @@ La chiave viene generata come UUID v4 (es. `a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 ```json
 {
-  "message": "Category not found.",
+  "message": "Category is inactive.",
   "errors": {
-    "category": ["No category matches 'categoria-inesistente'"]
+    "category": ["Category 'Nome Categoria' is not active"]
   }
 }
 ```
@@ -314,19 +319,10 @@ curl -X POST http://localhost:8000/api/import/lead \
 
 ---
 
-## Categorie disponibili
+## Categorie
 
-Le categorie accettano sia lo slug che il nome. Elenco attuale:
+Le categorie accettano sia lo slug che il nome. Se la categoria passata **non esiste**, viene **creata automaticamente** con `is_active: true` e `max_shares: 3`. Il nome viene derivato dallo slug (es. `pompe-di-calore` → `Pompe Di Calore`).
 
-| Slug | Nome |
-|------|------|
-| `fotovoltaico` | Fotovoltaico |
-| `infissi` | Infissi |
-| `climatizzazione` | Climatizzazione |
-| `caldaie` | Caldaie |
-| `pompe-di-calore` | Pompe di Calore |
-| `ristrutturazioni` | Ristrutturazioni |
-| `efficienza-energetica` | Efficienza Energetica |
-| `isolamento-termico` | Isolamento Termico |
+L'unico caso di errore 422 è quando la categoria esiste ma è **inattiva** (`is_active: false`).
 
-> L'elenco puo variare: le categorie sono gestite dal backoffice admin. Per ottenere la lista aggiornata usare `GET /api/public/categories`.
+Per ottenere la lista delle categorie esistenti: `GET /api/public/categories`.

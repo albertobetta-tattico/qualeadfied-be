@@ -16,8 +16,7 @@ class LeadController extends Controller
         if ($request->filled('search')) {
             $search = $request->input('search');
             $query->where(function ($q) use ($search) {
-                $q->where('first_name', 'like', '%'.$search.'%')
-                  ->orWhere('last_name', 'like', '%'.$search.'%')
+                $q->where('full_name', 'like', '%'.$search.'%')
                   ->orWhere('email', 'like', '%'.$search.'%');
             });
         }
@@ -81,13 +80,13 @@ class LeadController extends Controller
     {
         $validated = $request->validate([
             'category_id' => ['required', 'exists:categories,id'],
-            'province_id' => ['required', 'exists:provinces,id'],
+            'province_id' => ['nullable', 'exists:provinces,id'],
             'source_id' => ['required', 'exists:lead_sources,id'],
-            'first_name' => ['required', 'string', 'max:100'],
-            'last_name' => ['required', 'string', 'max:100'],
+            'full_name' => ['required', 'string', 'max:200'],
             'email' => ['required', 'email', 'max:255'],
             'phone' => ['required', 'string', 'max:50'],
-            'request_text' => ['required', 'string'],
+            'address' => ['nullable', 'string', 'max:500'],
+            'request_text' => ['nullable', 'string'],
             'extra_tags' => ['nullable', 'array'],
             'generated_at' => ['sometimes', 'date'],
             'external_id' => ['nullable', 'string', 'max:255'],
@@ -109,13 +108,13 @@ class LeadController extends Controller
     {
         $validated = $request->validate([
             'category_id' => ['sometimes', 'exists:categories,id'],
-            'province_id' => ['sometimes', 'exists:provinces,id'],
+            'province_id' => ['nullable', 'exists:provinces,id'],
             'source_id' => ['sometimes', 'exists:lead_sources,id'],
-            'first_name' => ['sometimes', 'string', 'max:100'],
-            'last_name' => ['sometimes', 'string', 'max:100'],
+            'full_name' => ['sometimes', 'string', 'max:200'],
             'email' => ['sometimes', 'email', 'max:255'],
             'phone' => ['sometimes', 'string', 'max:50'],
-            'request_text' => ['sometimes', 'string'],
+            'address' => ['nullable', 'string', 'max:500'],
+            'request_text' => ['nullable', 'string'],
             'extra_tags' => ['nullable', 'array'],
             'medium' => ['nullable', 'string', 'max:100'],
             'campaign' => ['nullable', 'string', 'max:255'],
