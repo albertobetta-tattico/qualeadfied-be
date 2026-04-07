@@ -61,25 +61,31 @@ class DashboardController extends Controller
             'kpis' => [
                 'total_leads' => $totalLeads,
                 'leads_this_month' => $leadsThisMonth,
-                'leads_trend' => $leadsLastMonth > 0
-                    ? round(($leadsThisMonth - $leadsLastMonth) / $leadsLastMonth * 100, 1)
-                    : 0,
+                'leads_trend' => $this->trend($leadsThisMonth, $leadsLastMonth),
                 'orders_this_month' => $ordersThisMonth,
-                'orders_trend' => $ordersLastMonth > 0
-                    ? round(($ordersThisMonth - $ordersLastMonth) / $ordersLastMonth * 100, 1)
-                    : 0,
+                'orders_trend' => $this->trend($ordersThisMonth, $ordersLastMonth),
                 'revenue_this_month' => round((float) $revenueThisMonth, 2),
-                'revenue_trend' => $revenueLastMonth > 0
-                    ? round(($revenueThisMonth - $revenueLastMonth) / $revenueLastMonth * 100, 1)
-                    : 0,
+                'revenue_trend' => $this->trend((float) $revenueThisMonth, (float) $revenueLastMonth),
                 'new_clients_this_month' => $newClientsThisMonth,
-                'new_clients_trend' => $newClientsLastMonth > 0
-                    ? round(($newClientsThisMonth - $newClientsLastMonth) / $newClientsLastMonth * 100, 1)
-                    : 0,
+                'new_clients_trend' => $this->trend($newClientsThisMonth, $newClientsLastMonth),
             ],
             'recent_leads' => $recentLeads,
             'recent_orders' => $recentOrders,
             'top_categories' => $topCategories,
         ]]);
+    }
+
+    /**
+     * Calcola il trend percentuale tra il valore corrente e quello precedente.
+     * Ritorna null quando non c'è una baseline (mese precedente a 0): il frontend
+     * mostrerà "—" o un'etichetta dedicata invece di un fuorviante 0%.
+     */
+    private function trend(int|float $current, int|float $previous): ?float
+    {
+        if ($previous <= 0) {
+            return null;
+        }
+
+        return round(($current - $previous) / $previous * 100, 1);
     }
 }

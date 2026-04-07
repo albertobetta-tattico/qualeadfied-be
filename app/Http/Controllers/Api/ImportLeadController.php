@@ -59,7 +59,8 @@ class ImportLeadController extends Controller
             // Tracciamento acquisizione (opzionali)
             'medium'       => ['nullable', 'string', 'max:100'],
             'campaign'     => ['nullable', 'string', 'max:255'],
-            'request_text' => ['nullable', 'string'],
+            'origin'       => ['nullable', 'string', 'max:50'],
+            'request_text' => ['required', 'string'],
 
             // Riferimenti esterni (opzionali)
             'external_id'  => ['nullable', 'string', 'max:255'],
@@ -130,6 +131,7 @@ class ImportLeadController extends Controller
             'country'        => strtoupper($validated['country']),
             'medium'         => $validated['medium'] ?? null,
             'campaign'       => $validated['campaign'] ?? null,
+            'origin'         => $validated['origin'] ?? null,
             'request_text'   => $validated['request_text'] ?? null,
             'external_id'    => $validated['external_id'] ?? null,
             'extra_tags'     => $validated['extra_tags'] ?? null,

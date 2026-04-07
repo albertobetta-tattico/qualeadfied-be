@@ -86,12 +86,13 @@ class LeadController extends Controller
             'email' => ['required', 'email', 'max:255'],
             'phone' => ['required', 'string', 'max:50'],
             'address' => ['nullable', 'string', 'max:500'],
-            'request_text' => ['nullable', 'string'],
+            'request_text' => ['required', 'string'],
             'extra_tags' => ['nullable', 'array'],
             'generated_at' => ['sometimes', 'date'],
             'external_id' => ['nullable', 'string', 'max:255'],
             'medium' => ['nullable', 'string', 'max:100'],
             'campaign' => ['nullable', 'string', 'max:255'],
+            'origin' => ['nullable', 'string', 'max:50'],
             'country' => ['sometimes', 'string', 'size:2'],
         ]);
 
@@ -114,10 +115,11 @@ class LeadController extends Controller
             'email' => ['sometimes', 'email', 'max:255'],
             'phone' => ['sometimes', 'string', 'max:50'],
             'address' => ['nullable', 'string', 'max:500'],
-            'request_text' => ['nullable', 'string'],
+            'request_text' => ['sometimes', 'required', 'string'],
             'extra_tags' => ['nullable', 'array'],
             'medium' => ['nullable', 'string', 'max:100'],
             'campaign' => ['nullable', 'string', 'max:255'],
+            'origin' => ['nullable', 'string', 'max:50'],
             'country' => ['sometimes', 'string', 'size:2'],
         ]);
 

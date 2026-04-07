@@ -31,6 +31,7 @@ class Lead extends Model
         'medium',
         'campaign',
         'country',
+        'origin',
     ];
 
     /**
