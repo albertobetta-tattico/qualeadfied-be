@@ -74,6 +74,7 @@ Route::prefix('public')->group(function () {
     Route::get('/leads', [PublicCatalogController::class, 'leads']);
     Route::get('/categories', [PublicCatalogController::class, 'categories']);
     Route::get('/provinces', [PublicCatalogController::class, 'provinces']);
+    Route::get('/homepage-content', [PublicCatalogController::class, 'homepageContent']);
     Route::post('/lead-submissions', [PublicLeadSubmissionController::class, 'store']);
 });
 

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Category;
 use App\Models\Lead;
+use App\Models\Order;
 use App\Models\Province;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -82,5 +83,33 @@ class PublicCatalogController extends Controller
             ->get(['id', 'name', 'code', 'region']);
 
         return response()->json(['provinces' => $provinces]);
+    }
+
+    public function homepageContent(): JsonResponse
+    {
+        $stats = [
+            'total_leads_available' => Lead::whereIn('status', ['free', 'sold_shared'])->count(),
+            'categories_count' => Category::where('is_active', true)->count(),
+            'provinces_covered' => Province::where('is_active', true)
+                ->whereHas('leads', fn ($q) => $q->whereIn('status', ['free', 'sold_shared']))
+                ->count(),
+            'satisfied_clients' => Order::where('status', 'completed')
+                ->distinct('user_id')
+                ->count('user_id'),
+        ];
+
+        $featuredCategories = Category::where('is_active', true)
+            ->withCount(['leads' => function ($query) {
+                $query->whereIn('status', ['free', 'sold_shared']);
+            }])
+            ->with('currentPrice')
+            ->orderBy('sort_order')
+            ->limit(6)
+            ->get();
+
+        return response()->json([
+            'stats' => $stats,
+            'featured_categories' => $featuredCategories,
+        ]);
     }
 }
