@@ -7,6 +7,7 @@ use App\Models\Package;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\UserPackage;
+use App\Models\Transaction;
 use App\Models\UserLead;
 use App\Enums\AcquisitionMode;
 use App\Enums\AcquisitionType;
@@ -15,6 +16,8 @@ use App\Enums\OrderType;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentMethod;
 use App\Enums\PackageStatus;
+use App\Enums\TransactionStatus;
+use App\Enums\TransactionPaymentType;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -70,14 +73,28 @@ class ClientPackageController extends Controller
             return response()->json(['message' => 'Package is not available'], 422);
         }
 
-        $result = DB::transaction(function () use ($user, $package, $request) {
-            $exclusiveTotal = (float) $package->exclusive_price * $package->exclusive_lead_quantity;
-            $sharedTotal = (float) $package->shared_price * $package->shared_lead_quantity;
-            $subtotal = round($exclusiveTotal + $sharedTotal, 2);
-            $vatRate = 22;
-            $vatAmount = round($subtotal * $vatRate / 100, 2);
-            $total = round($subtotal + $vatAmount, 2);
+        $exclusiveTotal = (float) $package->exclusive_price * $package->exclusive_lead_quantity;
+        $sharedTotal = (float) $package->shared_price * $package->shared_lead_quantity;
+        $subtotal = round($exclusiveTotal + $sharedTotal, 2);
+        $vatRate = 22;
+        $vatAmount = round($subtotal * $vatRate / 100, 2);
+        $total = round($subtotal + $vatAmount, 2);
 
+        // Create Stripe PaymentIntent
+        $stripe = new \Stripe\StripeClient(config('services.stripe.secret'));
+
+        $paymentIntent = $stripe->paymentIntents->create([
+            'amount' => (int) round($total * 100),
+            'currency' => 'eur',
+            'metadata' => [
+                'user_id' => $user->id,
+                'package_id' => $package->id,
+                'type' => 'package',
+            ],
+        ]);
+
+        // Create order with pending status
+        $order = DB::transaction(function () use ($user, $package, $request, $subtotal, $vatRate, $vatAmount, $total, $paymentIntent) {
             $orderNumber = 'ORD-' . date('Y') . '-' . str_pad(
                 Order::whereYear('created_at', date('Y'))->count() + 1,
                 5,
@@ -96,8 +113,8 @@ class ClientPackageController extends Controller
                 'vat_rate' => $vatRate,
                 'vat_amount' => $vatAmount,
                 'total' => $total,
-                'status' => OrderStatus::Paid,
-                'paid_at' => Carbon::now(),
+                'status' => OrderStatus::Pending,
+                'payment_id' => $paymentIntent->id,
             ]);
 
             OrderItem::create([
@@ -108,6 +125,67 @@ class ClientPackageController extends Controller
                 'quantity' => 1,
                 'line_total' => $subtotal,
             ]);
+
+            return $order;
+        });
+
+        return response()->json(['data' => [
+            'client_secret' => $paymentIntent->client_secret,
+            'amount' => $total,
+            'currency' => 'eur',
+            'order_id' => $order->id,
+            'package_id' => $package->id,
+        ]]);
+    }
+
+    public function confirmPurchase(Request $request): JsonResponse
+    {
+        $request->validate([
+            'payment_intent_id' => 'required|string',
+        ]);
+
+        $user = $request->user();
+        $paymentIntentId = $request->payment_intent_id;
+
+        $order = Order::where('user_id', $user->id)
+            ->where('payment_id', $paymentIntentId)
+            ->where('type', OrderType::Package)
+            ->where('status', OrderStatus::Pending)
+            ->firstOrFail();
+
+        // Verify with Stripe
+        $stripe = new \Stripe\StripeClient(config('services.stripe.secret'));
+        $paymentIntent = $stripe->paymentIntents->retrieve($paymentIntentId);
+
+        if ($paymentIntent->status !== 'succeeded') {
+            return response()->json([
+                'message' => 'Payment not yet completed',
+            ], 422);
+        }
+
+        $result = DB::transaction(function () use ($order, $user, $paymentIntent) {
+            $order->update([
+                'status' => OrderStatus::Paid,
+                'paid_at' => Carbon::now(),
+            ]);
+
+            // Create transaction record
+            Transaction::create([
+                'order_id' => $order->id,
+                'stripe_payment_intent_id' => $paymentIntent->id,
+                'stripe_charge_id' => $paymentIntent->latest_charge ?? null,
+                'payment_type' => $order->payment_method->value === 'card'
+                    ? TransactionPaymentType::Card
+                    : TransactionPaymentType::SepaDebit,
+                'amount' => $order->total,
+                'currency' => 'eur',
+                'status' => TransactionStatus::Succeeded,
+                'processed_at' => Carbon::now(),
+            ]);
+
+            // Get the package from the order item
+            $orderItem = $order->items()->whereNotNull('package_id')->first();
+            $package = Package::findOrFail($orderItem->package_id);
 
             $userPackage = UserPackage::create([
                 'user_id' => $user->id,

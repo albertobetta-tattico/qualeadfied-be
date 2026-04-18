@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\ClientProfileController;
 use App\Http\Controllers\Api\ClientTrialController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\ImportLeadController;
+use App\Http\Controllers\Api\LeadChangeController;
 use App\Http\Controllers\Api\InvoiceController;
 use App\Http\Controllers\Api\LeadController;
 use App\Http\Controllers\Api\LeadSaleController;
@@ -30,6 +31,7 @@ use App\Http\Controllers\Api\PublicLeadSubmissionController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\SettingsController;
 use App\Http\Controllers\Api\SystemSettingController;
+use App\Http\Controllers\Api\StripeWebhookController;
 use App\Http\Controllers\Api\TransactionController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\UserLeadController;
@@ -70,6 +72,9 @@ Route::prefix('admin/auth')->group(function () {
 
 Route::post('/import/lead', [ImportLeadController::class, 'store']);
 
+// Lead change: cross-sell link for marketing campaigns
+Route::get('/leadchange', LeadChangeController::class);
+
 Route::prefix('public')->group(function () {
     Route::get('/leads', [PublicCatalogController::class, 'leads']);
     Route::get('/categories', [PublicCatalogController::class, 'categories']);
@@ -80,6 +85,9 @@ Route::prefix('public')->group(function () {
 
 // Public packages list (no auth required)
 Route::get('/packages', [ClientPackageController::class, 'index']);
+
+// Stripe webhook (no auth, verified via signature)
+Route::post('/stripe/webhook', [StripeWebhookController::class, 'handle']);
 
 // ──────────────────────────────────────────────────────────────────────────
 // Authenticated routes (auth:sanctum)
@@ -139,6 +147,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Package purchase & selection
     Route::post('/packages/purchase', [ClientPackageController::class, 'purchase']);
+    Route::post('/packages/purchase/confirm', [ClientPackageController::class, 'confirmPurchase']);
     Route::post('/packages/{package}/select-leads', [ClientPackageController::class, 'selectLeads']);
 
     // Notification settings

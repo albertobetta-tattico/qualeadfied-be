@@ -22,7 +22,9 @@ class LeadController extends Controller
         }
 
         if ($request->filled('category_id')) {
-            $query->where('category_id', $request->input('category_id'));
+            $query->whereHas('categories', function ($q) use ($request) {
+                $q->where('categories.id', $request->input('category_id'));
+            });
         }
 
         if ($request->filled('province_id')) {
@@ -63,7 +65,7 @@ class LeadController extends Controller
 
         $perPage = $request->input('per_page', 20);
 
-        $leads = $query->with(['category', 'province', 'source'])
+        $leads = $query->with(['categories', 'province', 'source'])
             ->paginate($perPage);
 
         return $this->paginatedResponse($leads);
@@ -71,7 +73,7 @@ class LeadController extends Controller
 
     public function show(Lead $lead): JsonResponse
     {
-        $lead->load(['category', 'province', 'source']);
+        $lead->load(['categories', 'province', 'source']);
 
         return response()->json(['data' => $lead]);
     }
@@ -96,11 +98,15 @@ class LeadController extends Controller
             'country' => ['sometimes', 'string', 'size:2'],
         ]);
 
+        $categoryId = $validated['category_id'];
+        unset($validated['category_id']);
+
         $validated['status'] = 'free';
         $validated['current_shares'] = 0;
 
         $lead = Lead::create($validated);
-        $lead->load(['category', 'province', 'source']);
+        $lead->categories()->attach($categoryId);
+        $lead->load(['categories', 'province', 'source']);
 
         return response()->json(['data' => $lead], 201);
     }
@@ -108,7 +114,8 @@ class LeadController extends Controller
     public function update(Request $request, Lead $lead): JsonResponse
     {
         $validated = $request->validate([
-            'category_id' => ['sometimes', 'exists:categories,id'],
+            'category_ids' => ['sometimes', 'array', 'min:1'],
+            'category_ids.*' => ['exists:categories,id'],
             'province_id' => ['nullable', 'exists:provinces,id'],
             'source_id' => ['sometimes', 'exists:lead_sources,id'],
             'full_name' => ['sometimes', 'string', 'max:200'],
@@ -123,8 +130,13 @@ class LeadController extends Controller
             'country' => ['sometimes', 'string', 'size:2'],
         ]);
 
+        if (isset($validated['category_ids'])) {
+            $lead->categories()->sync($validated['category_ids']);
+            unset($validated['category_ids']);
+        }
+
         $lead->update($validated);
-        $lead->load(['category', 'province', 'source']);
+        $lead->load(['categories', 'province', 'source']);
 
         return response()->json(['data' => $lead]);
     }

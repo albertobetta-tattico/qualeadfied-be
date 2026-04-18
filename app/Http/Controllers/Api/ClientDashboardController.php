@@ -63,7 +63,7 @@ class ClientDashboardController extends Controller
         $user = $request->user();
 
         $recentLeads = UserLead::where('user_id', $user->id)
-            ->with(['lead.category', 'lead.province'])
+            ->with(['lead.categories', 'lead.province'])
             ->orderByDesc('purchased_at')
             ->limit(5)
             ->get()
@@ -74,7 +74,7 @@ class ClientDashboardController extends Controller
                         ? $userLead->lead->first_name . ' ' . $userLead->lead->last_name
                         : '',
                     'email' => $userLead->lead?->email ?? '',
-                    'category' => $userLead->lead?->category?->name ?? '',
+                    'categories' => $userLead->lead?->categories->pluck('name')->toArray() ?? [],
                     'province' => $userLead->lead?->province?->code ?? '',
                     'status' => $userLead->contact_status,
                     'acquisition_type' => $userLead->acquisition_type,

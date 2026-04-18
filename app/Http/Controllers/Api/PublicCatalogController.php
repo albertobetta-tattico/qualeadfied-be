@@ -38,20 +38,22 @@ class PublicCatalogController extends Controller
             ->orWhere('status', 'sold_shared');
 
         if ($request->filled('category_id')) {
-            $query->where('category_id', $request->input('category_id'));
+            $query->whereHas('categories', function ($q) use ($request) {
+                $q->where('categories.id', $request->input('category_id'));
+            });
         }
 
         if ($request->filled('province_id')) {
             $query->where('province_id', $request->input('province_id'));
         }
 
-        $leads = $query->with(['category:id,name,slug', 'province:id,name,code'])
+        $leads = $query->with(['categories:id,name,slug', 'province:id,name,code'])
             ->orderByDesc('generated_at')
             ->paginate(15)
             ->through(function (Lead $lead) {
                 return [
                     'id' => $lead->id,
-                    'category' => $lead->category,
+                    'categories' => $lead->categories,
                     'province' => $lead->province,
                     'request_preview' => Str::limit($lead->request_text, 80),
                     'generated_at' => $lead->generated_at,

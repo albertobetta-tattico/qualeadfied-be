@@ -28,11 +28,11 @@ class UserLeadsExport implements FromQuery, WithHeadings, WithMapping
     {
         $query = UserLead::query()
             ->where('user_id', $this->userId)
-            ->with(['lead.category', 'lead.province']);
+            ->with(['lead.categories', 'lead.province']);
 
         if ($this->categoryId) {
-            $query->whereHas('lead', function ($q) {
-                $q->where('category_id', $this->categoryId);
+            $query->whereHas('lead.categories', function ($q) {
+                $q->where('categories.id', $this->categoryId);
             });
         }
 
@@ -70,7 +70,7 @@ class UserLeadsExport implements FromQuery, WithHeadings, WithMapping
             $userLead->lead?->last_name ?? '',
             $userLead->lead?->email ?? '',
             $userLead->lead?->phone ?? '',
-            $userLead->lead?->category?->name ?? '',
+            $userLead->lead?->categories->pluck('name')->implode(', ') ?? '',
             $userLead->lead?->province?->name ?? '',
             $userLead->lead?->request_text ?? '',
             $userLead->acquisition_type?->value ?? '',

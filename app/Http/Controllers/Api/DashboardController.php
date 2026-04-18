@@ -40,7 +40,7 @@ class DashboardController extends Controller
             ->whereBetween('created_at', [$startOfLastMonth, $endOfLastMonth])->count();
 
         // Recent data
-        $recentLeads = Lead::with(['category', 'province'])
+        $recentLeads = Lead::with(['categories', 'province'])
             ->orderByDesc('created_at')
             ->limit(5)
             ->get();

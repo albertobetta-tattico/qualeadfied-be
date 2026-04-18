@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\LeadStatus;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Lead extends Model
@@ -15,7 +16,6 @@ class Lead extends Model
      * @var list<string>
      */
     protected $fillable = [
-        'category_id',
         'province_id',
         'source_id',
         'full_name',
@@ -49,11 +49,11 @@ class Lead extends Model
     }
 
     /**
-     * @return BelongsTo<Category, $this>
+     * @return BelongsToMany<Category, $this>
      */
-    public function category(): BelongsTo
+    public function categories(): BelongsToMany
     {
-        return $this->belongsTo(Category::class);
+        return $this->belongsToMany(Category::class)->withPivot('assigned_at');
     }
 
     /**

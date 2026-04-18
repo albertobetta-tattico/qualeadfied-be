@@ -121,7 +121,6 @@ class ImportLeadController extends Controller
 
         // ── Create Lead ──────────────────────────────────────────────
         $lead = Lead::create([
-            'category_id'    => $category->id,
             'province_id'    => $provinceId,
             'source_id'      => $source->id,
             'full_name'      => $validated['full_name'],
@@ -140,7 +139,9 @@ class ImportLeadController extends Controller
             'current_shares' => 0,
         ]);
 
-        $lead->load(['category', 'province', 'source']);
+        $lead->categories()->attach($category->id);
+
+        $lead->load(['categories', 'province', 'source']);
 
         Log::info('Lead imported via API', [
             'lead_id' => $lead->id,

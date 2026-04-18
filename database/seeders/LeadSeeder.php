@@ -214,8 +214,7 @@ class LeadSeeder extends Seeder
 
                 $emailSlug = strtolower(str_replace(' ', '', $firstName)) . '.' . strtolower(str_replace([' ', "'"], ['', ''], $lastName));
 
-                Lead::create([
-                    'category_id' => $categoryId,
+                $lead = Lead::create([
                     'province_id' => $provinceId,
                     'source_id' => $sourceId,
                     'first_name' => $firstName,
@@ -232,6 +231,8 @@ class LeadSeeder extends Seeder
                     'medium' => $mediaOptions[array_rand($mediaOptions)],
                     'campaign' => $campaignOptions[array_rand($campaignOptions)],
                 ]);
+
+                $lead->categories()->attach($categoryId);
 
                 $leadIndex++;
             }

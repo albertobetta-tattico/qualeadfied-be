@@ -56,7 +56,7 @@ class OrderController extends Controller
 
     public function show(Request $request, Order $order): JsonResponse
     {
-        $order->load(['user.clientProfile', 'items.lead.category', 'items.lead.province', 'invoice', 'transactions']);
+        $order->load(['user.clientProfile', 'items.lead.categories', 'items.lead.province', 'invoice', 'transactions']);
 
         $data = $order->toArray();
 

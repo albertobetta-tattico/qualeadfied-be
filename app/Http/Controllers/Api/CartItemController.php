@@ -12,7 +12,7 @@ class CartItemController extends Controller
     public function index(Request $request): JsonResponse
     {
         $items = CartItem::where('user_id', $request->user()->id)
-            ->with(['lead.category', 'lead.province'])
+            ->with(['lead.categories', 'lead.province'])
             ->orderByDesc('added_at')
             ->get();
 
@@ -31,7 +31,7 @@ class CartItemController extends Controller
         $validated['added_at'] = now();
 
         $item = CartItem::create($validated);
-        $item->load(['lead.category', 'lead.province']);
+        $item->load(['lead.categories', 'lead.province']);
 
         return response()->json(['cart_item' => $item], 201);
     }

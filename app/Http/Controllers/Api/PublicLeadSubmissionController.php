@@ -26,7 +26,6 @@ class PublicLeadSubmissionController extends Controller
         $category = Category::where('slug', $validated['category_slug'])->firstOrFail();
 
         $lead = Lead::create([
-            'category_id' => $category->id,
             'province_id' => $validated['province_id'],
             'first_name' => $validated['first_name'],
             'last_name' => $validated['last_name'],
@@ -38,6 +37,8 @@ class PublicLeadSubmissionController extends Controller
             'current_shares' => 0,
             'generated_at' => now()->toDateString(),
         ]);
+
+        $lead->categories()->attach($category->id);
 
         return response()->json([
             'message' => 'Lead submitted successfully.',

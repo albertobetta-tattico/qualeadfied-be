@@ -123,15 +123,18 @@ class ReportController extends Controller
         // Aggregate lead_sales data per category in a single query
         $salesData = DB::table('lead_sales')
             ->join('leads', 'lead_sales.lead_id', '=', 'leads.id')
-            ->selectRaw('leads.category_id, COUNT(lead_sales.id) as leads_sold, SUM(lead_sales.price_paid) as revenue')
-            ->groupBy('leads.category_id')
+            ->join('category_lead', 'leads.id', '=', 'category_lead.lead_id')
+            ->selectRaw('category_lead.category_id, COUNT(DISTINCT lead_sales.id) as leads_sold, SUM(lead_sales.price_paid) as revenue')
+            ->groupBy('category_lead.category_id')
             ->get()
             ->keyBy('category_id');
 
         // Leads available (status = free) per category
-        $availableData = Lead::where('status', LeadStatus::Free)
-            ->selectRaw('category_id, COUNT(*) as available_count')
-            ->groupBy('category_id')
+        $availableData = DB::table('leads')
+            ->join('category_lead', 'leads.id', '=', 'category_lead.lead_id')
+            ->where('leads.status', LeadStatus::Free)
+            ->selectRaw('category_lead.category_id, COUNT(DISTINCT leads.id) as available_count')
+            ->groupBy('category_lead.category_id')
             ->pluck('available_count', 'category_id');
 
         $categories = Category::withCount('leads')
@@ -182,7 +185,8 @@ class ReportController extends Controller
 
         // Top category per province: find the category with the most leads for each province
         $topCategories = DB::table('leads')
-            ->join('categories', 'leads.category_id', '=', 'categories.id')
+            ->join('category_lead', 'leads.id', '=', 'category_lead.lead_id')
+            ->join('categories', 'category_lead.category_id', '=', 'categories.id')
             ->selectRaw('leads.province_id, categories.name as category_name, COUNT(*) as lead_count')
             ->groupBy('leads.province_id', 'categories.name')
             ->get()

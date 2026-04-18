@@ -25,8 +25,8 @@ class UserLeadController extends Controller
         }
 
         if ($request->filled('category_id')) {
-            $query->whereHas('lead', function ($q) use ($request) {
-                $q->where('category_id', $request->input('category_id'));
+            $query->whereHas('lead.categories', function ($q) use ($request) {
+                $q->where('categories.id', $request->input('category_id'));
             });
         }
 
@@ -52,7 +52,7 @@ class UserLeadController extends Controller
         $query->orderBy($sortBy, $sortOrder);
 
         $perPage = $request->input('per_page', 20);
-        $userLeads = $query->with(['lead.category', 'lead.province'])
+        $userLeads = $query->with(['lead.categories', 'lead.province'])
             ->paginate($perPage);
 
         return $this->paginatedResponse($userLeads);
@@ -60,7 +60,7 @@ class UserLeadController extends Controller
 
     public function show(UserLead $userLead): JsonResponse
     {
-        $userLead->load(['lead.category', 'lead.province']);
+        $userLead->load(['lead.categories', 'lead.province']);
 
         return response()->json(['data' => $userLead]);
     }

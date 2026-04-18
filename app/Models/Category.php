@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -16,6 +17,8 @@ class Category extends Model
      *
      * @var list<string>
      */
+    protected $appends = ['leadchange_url'];
+
     protected $fillable = [
         'name',
         'slug',
@@ -58,16 +61,23 @@ class Category extends Model
     }
 
     /**
-     * @return HasMany<Lead, $this>
+     * @return BelongsToMany<Lead, $this>
      */
-    public function leads(): HasMany
+    public function leads(): BelongsToMany
     {
-        return $this->hasMany(Lead::class);
+        return $this->belongsToMany(Lead::class)->withPivot('assigned_at');
     }
 
     /**
      * @return HasMany<NotificationSetting, $this>
      */
+    public function getLeadchangeUrlAttribute(): string
+    {
+        $base = rtrim(config('app.url'), '/');
+
+        return "{$base}/api/leadchange?email=USER_EMAIL&tel=USER_PHONE&category_destination={$this->id}";
+    }
+
     public function notificationSettings(): HasMany
     {
         return $this->hasMany(NotificationSetting::class);

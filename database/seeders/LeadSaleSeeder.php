@@ -39,7 +39,7 @@ class LeadSaleSeeder extends Seeder
                 'user_package_id' => null,
                 'mode' => 'exclusive',
                 'share_slot' => null,
-                'price_paid' => $this->getPriceForCategory($lead->category_id, 'exclusive'),
+                'price_paid' => $this->getPriceForCategory($lead->categories->first()?->id, 'exclusive'),
                 'sold_at' => $lead->generated_at ? $lead->generated_at->copy()->addDays(rand(1, 7)) : now()->subDays(rand(1, 30)),
             ]);
         }
@@ -68,7 +68,7 @@ class LeadSaleSeeder extends Seeder
                     'user_package_id' => null,
                     'mode' => 'shared',
                     'share_slot' => $slot,
-                    'price_paid' => $this->getPriceForCategory($lead->category_id, 'shared'),
+                    'price_paid' => $this->getPriceForCategory($lead->categories->first()?->id, 'shared'),
                     'sold_at' => $lead->generated_at ? $lead->generated_at->copy()->addDays(rand(1, 7)) : now()->subDays(rand(1, 30)),
                 ]);
             }
@@ -97,7 +97,7 @@ class LeadSaleSeeder extends Seeder
                     'user_package_id' => null,
                     'mode' => 'shared',
                     'share_slot' => $slot,
-                    'price_paid' => $this->getPriceForCategory($lead->category_id, 'shared'),
+                    'price_paid' => $this->getPriceForCategory($lead->categories->first()?->id, 'shared'),
                     'sold_at' => $lead->generated_at ? $lead->generated_at->copy()->addDays(rand(1, 5)) : now()->subDays(rand(1, 30)),
                 ]);
             }
