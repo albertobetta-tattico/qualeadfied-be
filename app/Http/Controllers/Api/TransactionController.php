@@ -11,7 +11,7 @@ class TransactionController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $query = Transaction::with('order.user');
+        $query = Transaction::with('order.user.clientProfile');
 
         if ($request->filled('status')) {
             $query->where('status', $request->input('status'));

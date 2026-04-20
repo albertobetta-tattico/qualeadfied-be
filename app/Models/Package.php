@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Casts\Attribute;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
@@ -25,6 +27,14 @@ class Package extends Model
     ];
 
     /**
+     * Always include the resolved `categories` array in JSON responses, so the
+     * admin UI can render category badges without a separate lookup.
+     *
+     * @var list<string>
+     */
+    protected $appends = ['categories'];
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>
@@ -45,5 +55,21 @@ class Package extends Model
     public function userPackages(): HasMany
     {
         return $this->hasMany(UserPackage::class);
+    }
+
+    /**
+     * Resolve the Category rows referenced by the `category_ids` JSON column.
+     */
+    protected function categories(): Attribute
+    {
+        return Attribute::make(
+            get: function (): Collection {
+                $ids = $this->category_ids ?? [];
+                if (empty($ids)) {
+                    return Category::query()->whereRaw('1 = 0')->get();
+                }
+                return Category::query()->whereIn('id', $ids)->get();
+            }
+        );
     }
 }

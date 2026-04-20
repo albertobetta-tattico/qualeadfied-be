@@ -19,9 +19,21 @@ class ReportController extends Controller
 {
     /**
      * Sales statistics with month-over-month change percentages and 12-month chart data.
+     * Supports optional filters: client_id (user_id of the buyer).
      */
     public function sales(Request $request): JsonResponse
     {
+        $clientId = $request->input('client_id');
+
+        // Helper closure to apply common filters to every Order query we build below
+        $applyFilters = function ($query) use ($clientId) {
+            $query->where('status', OrderStatus::Paid);
+            if ($clientId) {
+                $query->where('user_id', $clientId);
+            }
+            return $query;
+        };
+
         $now = Carbon::now();
         $currentMonthStart = $now->copy()->startOfMonth();
         $currentMonthEnd = $now->copy()->endOfMonth();
@@ -29,27 +41,29 @@ class ReportController extends Controller
         $previousMonthEnd = $now->copy()->subMonth()->endOfMonth();
 
         // Current month stats
-        $currentRevenue = (float) Order::where('status', OrderStatus::Paid)
+        $currentRevenue = (float) $applyFilters(Order::query())
             ->whereBetween('created_at', [$currentMonthStart, $currentMonthEnd])
             ->sum('total');
 
-        $currentOrders = Order::where('status', OrderStatus::Paid)
+        $currentOrders = $applyFilters(Order::query())
             ->whereBetween('created_at', [$currentMonthStart, $currentMonthEnd])
             ->count();
 
         // Previous month stats
-        $previousRevenue = (float) Order::where('status', OrderStatus::Paid)
+        $previousRevenue = (float) $applyFilters(Order::query())
             ->whereBetween('created_at', [$previousMonthStart, $previousMonthEnd])
             ->sum('total');
 
-        $previousOrders = Order::where('status', OrderStatus::Paid)
+        $previousOrders = $applyFilters(Order::query())
             ->whereBetween('created_at', [$previousMonthStart, $previousMonthEnd])
             ->count();
 
-        // Totals (all time for paid orders)
-        $totalRevenue = (float) Order::where('status', OrderStatus::Paid)->sum('total');
-        $totalOrders = Order::where('status', OrderStatus::Paid)->count();
-        $totalLeadsSold = LeadSale::count();
+        // Totals (all time for paid orders, optionally filtered by client)
+        $totalRevenue = (float) $applyFilters(Order::query())->sum('total');
+        $totalOrders = $applyFilters(Order::query())->count();
+        $totalLeadsSold = $clientId
+            ? LeadSale::whereHas('order', fn ($q) => $q->where('user_id', $clientId))->count()
+            : LeadSale::count();
         $averageOrderValue = $totalOrders > 0 ? round($totalRevenue / $totalOrders, 2) : 0;
 
         // Change percentages (current month vs previous month)
@@ -64,7 +78,7 @@ class ReportController extends Controller
         // Chart data: last 12 months
         $chartStartDate = $now->copy()->subMonths(11)->startOfMonth();
 
-        $monthlyData = Order::where('status', OrderStatus::Paid)
+        $monthlyData = $applyFilters(Order::query())
             ->where('created_at', '>=', $chartStartDate)
             ->selectRaw('DATE_FORMAT(created_at, "%Y-%m") as month, SUM(total) as revenue, COUNT(*) as orders')
             ->groupBy('month')
@@ -72,7 +86,7 @@ class ReportController extends Controller
             ->pluck('revenue', 'month')
             ->toArray();
 
-        $monthlyOrders = Order::where('status', OrderStatus::Paid)
+        $monthlyOrders = $applyFilters(Order::query())
             ->where('created_at', '>=', $chartStartDate)
             ->selectRaw('DATE_FORMAT(created_at, "%Y-%m") as month, COUNT(*) as orders')
             ->groupBy('month')
