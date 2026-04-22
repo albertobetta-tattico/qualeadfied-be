@@ -97,6 +97,33 @@ cat > "$STAGING_DIR/.htaccess" << 'HTEOF'
 # Force index.html over index.php for directory requests (Nuxt SPA over Laravel)
 DirectoryIndex index.html
 
+# ===================================================
+# MIME types (evita MIME "text/html" per .js/.mjs/.wasm)
+# ===================================================
+<IfModule mod_mime.c>
+    AddType application/javascript .js .mjs
+    AddType application/wasm       .wasm
+    AddType text/css               .css
+    AddType image/svg+xml          .svg
+    AddType font/woff              .woff
+    AddType font/woff2             .woff2
+</IfModule>
+
+# ===================================================
+# Cache policy: HTML sempre fresco, asset hashati immutable
+# ===================================================
+<IfModule mod_headers.c>
+    <FilesMatch "\.(html)$">
+        Header set Cache-Control "no-cache, no-store, must-revalidate"
+        Header set Pragma "no-cache"
+        Header set Expires "0"
+    </FilesMatch>
+
+    <FilesMatch "\.(js|mjs|css|woff|woff2|ttf|otf|eot|svg|png|jpg|jpeg|gif|webp|avif|ico|map|wasm)$">
+        Header set Cache-Control "public, max-age=31536000, immutable"
+    </FilesMatch>
+</IfModule>
+
 <IfModule mod_rewrite.c>
     <IfModule mod_negotiation.c>
         Options -MultiViews -Indexes
@@ -127,6 +154,15 @@ DirectoryIndex index.html
 
     RewriteCond %{REQUEST_FILENAME} -d
     RewriteRule .* - [L]
+
+    # -----------------------------------------------
+    # Asset mancanti NON vanno nel fallback SPA:
+    # meglio un 404 pulito (evita MIME "text/html" sui .js)
+    # -----------------------------------------------
+    RewriteCond %{REQUEST_URI} ^/_nuxt/ [OR]
+    RewriteCond %{REQUEST_URI} \.(js|mjs|css|map|wasm|woff2?|ttf|otf|eot|svg|png|jpg|jpeg|gif|webp|avif|ico|json)$ [NC]
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule . - [R=404,L]
 
     # -----------------------------------------------
     # Everything else → Nuxt SPA fallback
