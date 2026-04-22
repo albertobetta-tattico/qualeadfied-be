@@ -124,7 +124,7 @@ class UserController extends Controller
 
     public function show(User $user): JsonResponse
     {
-        $user->load('clientProfile');
+        $user->load(['clientProfile.categories']);
 
         return response()->json(['data' => $user]);
     }
@@ -134,11 +134,88 @@ class UserController extends Controller
         $validated = $request->validate([
             'email' => ['sometimes', 'email', 'unique:users,email,' . $user->id],
             'role' => ['sometimes', 'string'],
-            'status' => ['sometimes', 'string'],
+            'status' => ['sometimes', 'string', 'in:active,pending,suspended'],
+
+            'company_name' => ['sometimes', 'string', 'max:255'],
+            'vat_number' => ['sometimes', 'string', 'max:32'],
+            'phone' => ['sometimes', 'string', 'max:32'],
+            'contact_first_name' => ['sometimes', 'string', 'max:100'],
+            'contact_last_name' => ['sometimes', 'string', 'max:100'],
+
+            'free_trial_enabled' => ['sometimes', 'boolean'],
+            'free_trial_leads_total' => ['sometimes', 'integer', 'min:0'],
+            'notify_new_leads' => ['sometimes', 'boolean'],
+
+            'billing_data' => ['sometimes', 'array'],
+            'billing_data.address' => ['nullable', 'string', 'max:255'],
+            'billing_data.city' => ['nullable', 'string', 'max:100'],
+            'billing_data.province' => ['nullable', 'string', 'max:10'],
+            'billing_data.postal_code' => ['nullable', 'string', 'max:10'],
+            'billing_data.country' => ['nullable', 'string', 'max:2'],
+            'billing_data.sdi_code' => ['nullable', 'string', 'max:20'],
+            'billing_data.pec' => ['nullable', 'string', 'email', 'max:255'],
+
+            'bank_data' => ['sometimes', 'array'],
+            'bank_data.iban' => ['nullable', 'string', 'max:34'],
+            'bank_data.bank_account_holder' => ['nullable', 'string', 'max:255'],
+            'bank_data.bic_swift' => ['nullable', 'string', 'max:11'],
+            'bank_data.bank_name' => ['nullable', 'string', 'max:255'],
+
+            'category_ids' => ['sometimes', 'array'],
+            'category_ids.*' => ['integer', 'exists:categories,id'],
         ]);
 
-        $user->update($validated);
-        $user->load('clientProfile');
+        DB::transaction(function () use ($validated, $user) {
+            $userFields = array_intersect_key($validated, array_flip(['email', 'role', 'status']));
+            if (!empty($userFields)) {
+                $user->update($userFields);
+            }
+
+            $profile = $user->clientProfile()->firstOrNew(['user_id' => $user->id]);
+
+            $profileMap = [
+                'company_name' => $validated['company_name'] ?? null,
+                'vat_number' => $validated['vat_number'] ?? null,
+                'phone' => $validated['phone'] ?? null,
+                'first_name' => $validated['contact_first_name'] ?? null,
+                'last_name' => $validated['contact_last_name'] ?? null,
+                'free_trial_enabled' => $validated['free_trial_enabled'] ?? null,
+                'free_trial_leads_remaining' => $validated['free_trial_leads_total'] ?? null,
+                'email_notifications_enabled' => $validated['notify_new_leads'] ?? null,
+            ];
+
+            if (array_key_exists('billing_data', $validated)) {
+                $b = $validated['billing_data'] ?? [];
+                $profileMap['billing_address'] = $b['address'] ?? '';
+                $profileMap['billing_city'] = $b['city'] ?? '';
+                $profileMap['billing_province'] = $b['province'] ?? '';
+                $profileMap['billing_zip'] = $b['postal_code'] ?? '';
+                $profileMap['billing_country'] = $b['country'] ?? 'IT';
+                $profileMap['sdi_code'] = $b['sdi_code'] ?? null;
+                $profileMap['pec_email'] = $b['pec'] ?? null;
+            }
+
+            if (array_key_exists('bank_data', $validated)) {
+                $bk = $validated['bank_data'] ?? [];
+                $profileMap['bank_iban'] = $bk['iban'] ?? null;
+                $profileMap['bank_account_holder'] = $bk['bank_account_holder'] ?? null;
+                $profileMap['bank_bic_swift'] = $bk['bic_swift'] ?? null;
+                $profileMap['bank_name'] = $bk['bank_name'] ?? null;
+            }
+
+            $profileMap = array_filter($profileMap, fn ($v) => $v !== null);
+
+            if (!empty($profileMap)) {
+                $profile->fill($profileMap);
+                $profile->save();
+            }
+
+            if (array_key_exists('category_ids', $validated)) {
+                $profile->categories()->sync($validated['category_ids']);
+            }
+        });
+
+        $user->load(['clientProfile.categories']);
 
         return response()->json(['data' => $user]);
     }
