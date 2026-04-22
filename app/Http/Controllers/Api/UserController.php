@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
@@ -39,6 +40,86 @@ class UserController extends Controller
 
         $perPage = $request->input('per_page', 20);
         return $this->paginatedResponse($query->paginate($perPage));
+    }
+
+    public function store(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'email' => ['required', 'email', 'unique:users,email'],
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
+            'status' => ['sometimes', 'string', 'in:active,pending,suspended'],
+
+            'company_name' => ['required', 'string', 'max:255'],
+            'vat_number' => ['required', 'string', 'max:32'],
+            'phone' => ['required', 'string', 'max:32'],
+            'contact_first_name' => ['required', 'string', 'max:100'],
+            'contact_last_name' => ['required', 'string', 'max:100'],
+
+            'free_trial_enabled' => ['sometimes', 'boolean'],
+            'free_trial_leads_total' => ['sometimes', 'integer', 'min:0'],
+            'notify_new_leads' => ['sometimes', 'boolean'],
+
+            'billing_data' => ['sometimes', 'array'],
+            'billing_data.address' => ['nullable', 'string', 'max:255'],
+            'billing_data.city' => ['nullable', 'string', 'max:100'],
+            'billing_data.province' => ['nullable', 'string', 'max:10'],
+            'billing_data.postal_code' => ['nullable', 'string', 'max:10'],
+            'billing_data.country' => ['nullable', 'string', 'max:2'],
+            'billing_data.sdi_code' => ['nullable', 'string', 'max:20'],
+            'billing_data.pec' => ['nullable', 'string', 'email', 'max:255'],
+
+            'bank_data' => ['sometimes', 'array'],
+            'bank_data.iban' => ['nullable', 'string', 'max:34'],
+            'bank_data.bank_account_holder' => ['nullable', 'string', 'max:255'],
+            'bank_data.bic_swift' => ['nullable', 'string', 'max:11'],
+            'bank_data.bank_name' => ['nullable', 'string', 'max:255'],
+
+            'category_ids' => ['sometimes', 'array'],
+            'category_ids.*' => ['integer', 'exists:categories,id'],
+        ]);
+
+        $billing = $validated['billing_data'] ?? [];
+        $bank = $validated['bank_data'] ?? [];
+        $categoryIds = $validated['category_ids'] ?? [];
+
+        $user = DB::transaction(function () use ($validated, $billing, $bank, $categoryIds) {
+            $user = User::create([
+                'email' => $validated['email'],
+                'password' => $validated['password'],
+                'role' => 'client',
+                'status' => $validated['status'] ?? 'active',
+            ]);
+
+            $profile = $user->clientProfile()->create([
+                'company_name' => $validated['company_name'],
+                'vat_number' => $validated['vat_number'],
+                'phone' => $validated['phone'],
+                'first_name' => $validated['contact_first_name'],
+                'last_name' => $validated['contact_last_name'],
+                'billing_address' => $billing['address'] ?? '',
+                'billing_city' => $billing['city'] ?? '',
+                'billing_province' => $billing['province'] ?? '',
+                'billing_zip' => $billing['postal_code'] ?? '',
+                'billing_country' => $billing['country'] ?? 'IT',
+                'sdi_code' => $billing['sdi_code'] ?? null,
+                'pec_email' => $billing['pec'] ?? null,
+                'bank_iban' => $bank['iban'] ?? null,
+                'bank_account_holder' => $bank['bank_account_holder'] ?? null,
+                'bank_bic_swift' => $bank['bic_swift'] ?? null,
+                'bank_name' => $bank['bank_name'] ?? null,
+                'free_trial_enabled' => $validated['free_trial_enabled'] ?? false,
+                'free_trial_leads_remaining' => $validated['free_trial_leads_total'] ?? 0,
+                'email_notifications_enabled' => $validated['notify_new_leads'] ?? true,
+            ]);
+
+            if (!empty($categoryIds)) {
+                $profile->categories()->sync($categoryIds);
+            }
+
+            return $user->load(['clientProfile.categories']);
+        });
+
+        return response()->json(['data' => $user], 201);
     }
 
     public function show(User $user): JsonResponse

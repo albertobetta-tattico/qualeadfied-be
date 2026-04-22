@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class ClientProfile extends Model
 {
@@ -26,6 +27,10 @@ class ClientProfile extends Model
         'billing_country',
         'sdi_code',
         'pec_email',
+        'bank_iban',
+        'bank_account_holder',
+        'bank_bic_swift',
+        'bank_name',
         'free_trial_enabled',
         'free_trial_leads_remaining',
         'email_notifications_enabled',
@@ -52,5 +57,13 @@ class ClientProfile extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * @return BelongsToMany<Category, $this>
+     */
+    public function categories(): BelongsToMany
+    {
+        return $this->belongsToMany(Category::class);
     }
 }
