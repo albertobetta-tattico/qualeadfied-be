@@ -81,7 +81,8 @@ class LeadController extends Controller
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'category_id' => ['required', 'exists:categories,id'],
+            'category_ids' => ['required', 'array', 'min:1'],
+            'category_ids.*' => ['exists:categories,id'],
             'province_id' => ['nullable', 'exists:provinces,id'],
             'source_id' => ['required', 'exists:lead_sources,id'],
             'full_name' => ['required', 'string', 'max:200'],
@@ -98,14 +99,14 @@ class LeadController extends Controller
             'country' => ['sometimes', 'string', 'size:2'],
         ]);
 
-        $categoryId = $validated['category_id'];
-        unset($validated['category_id']);
+        $categoryIds = $validated['category_ids'];
+        unset($validated['category_ids']);
 
         $validated['status'] = 'free';
         $validated['current_shares'] = 0;
 
         $lead = Lead::create($validated);
-        $lead->categories()->attach($categoryId);
+        $lead->categories()->sync($categoryIds);
         $lead->load(['categories', 'province', 'source']);
 
         return response()->json(['data' => $lead], 201);

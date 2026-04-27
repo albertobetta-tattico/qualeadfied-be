@@ -233,8 +233,37 @@ echo "<pre>\n=== Qualeadfied Deploy ===\n\n";
 
 $root = __DIR__;
 
+// Wipe stale Nuxt SPA assets (hashed filenames change between builds; old
+// chunks left behind would just be dead bytes, but the real risk is having
+// the old index.html survive if the upload skips it for any reason).
+echo "[1/4] Wiping stale frontend assets...\n";
+$rmrf = function (string $path) use (&$rmrf): void {
+    if (! is_dir($path)) return;
+    $items = scandir($path) ?: [];
+    foreach ($items as $item) {
+        if ($item === '.' || $item === '..') continue;
+        $full = $path . '/' . $item;
+        is_dir($full) ? $rmrf($full) : @unlink($full);
+    }
+    @rmdir($path);
+};
+$rmrf($root . '/_nuxt');
+// Wipe stale prerendered route directories from previous deploys
+// (older builds with crawlLinks: true generated admin/, dashboard/, etc.).
+// IMPORTANT: do NOT include 'public', 'app', 'bootstrap', 'config', 'database',
+// 'resources', 'routes', 'storage', 'vendor', 'lang' — those are Laravel dirs.
+foreach (['admin', 'dashboard', 'login', 'pacchetti', 'carrello', 'catalogo',
+         'i-miei-lead', 'checkout', 'auth', 'register', 'profilo'] as $stale) {
+    $rmrf($root . '/' . $stale);
+}
+foreach (['index.html', '200.html', '404.html', 'favicon.ico', 'favicon.png',
+         'logo.png', 'logo-mini.png', 'robots.txt'] as $f) {
+    @unlink($root . '/' . $f);
+}
+echo "  OK\n";
+
 // Extract zip
-echo "[1/4] Extracting...\n";
+echo "[1b/4] Extracting...\n";
 $zip = new ZipArchive();
 if ($zip->open($root . '/qualeadfied-deploy.zip') === true) {
     $zip->extractTo($root);

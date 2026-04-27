@@ -138,16 +138,16 @@ La chiave viene generata come UUID v4 (es. `a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 ### 201 Created - Lead importato con successo
 
+> **Nota**: dalla migrazione many-to-many (Aprile 2026), il lead non ha più `category_id` né l'oggetto singolo `category`: ora c'è l'array `categories[]` con i pivot.
+
 ```json
 {
   "message": "Lead imported successfully.",
   "data": {
     "id": 81,
-    "category_id": 1,
     "province_id": 10,
     "source_id": 2,
-    "first_name": "Mario",
-    "last_name": "Rossi",
+    "full_name": "Mario Rossi",
     "email": "mario.rossi@gmail.com",
     "phone": "+39 333 1234567",
     "country": "IT",
@@ -161,7 +161,14 @@ La chiave viene generata come UUID v4 (es. `a1b2c3d4-e5f6-7890-abcd-ef1234567890
     "generated_at": "2026-03-24",
     "created_at": "2026-03-24T15:30:00.000000Z",
     "updated_at": "2026-03-24T15:30:00.000000Z",
-    "category": { "id": 1, "name": "Fotovoltaico", "slug": "fotovoltaico" },
+    "categories": [
+      {
+        "id": 1,
+        "name": "Fotovoltaico",
+        "slug": "fotovoltaico",
+        "pivot": { "lead_id": 81, "category_id": 1, "assigned_at": "2026-03-24 15:30:00" }
+      }
+    ],
     "province": { "id": 10, "name": "Milano", "code": "MI", "region": "Lombardia" },
     "source": { "id": 2, "name": "Facebook Ads", "slug": "facebook-ads" }
   }
@@ -195,9 +202,9 @@ La chiave viene generata come UUID v4 (es. `a1b2c3d4-e5f6-7890-abcd-ef1234567890
 
 ```json
 {
-  "message": "The first name field is required.",
+  "message": "The full name field is required.",
   "errors": {
-    "first_name": ["The first name field is required."],
+    "full_name": ["The full name field is required."],
     "email": ["The email field must be a valid email address."]
   }
 }
@@ -232,8 +239,7 @@ curl -X POST http://localhost:8000/api/import/lead \
   -H "Content-Type: application/json" \
   -H "X-Api-Key: $API_KEY" \
   -d '{
-    "first_name": "Mario",
-    "last_name": "Rossi",
+    "full_name": "Mario Rossi",
     "email": "mario.rossi@gmail.com",
     "phone": "+39 333 1234567",
     "category": "fotovoltaico",
@@ -255,13 +261,13 @@ curl -X POST http://localhost:8000/api/import/lead \
   -H "Content-Type: application/json" \
   -H "X-Api-Key: $API_KEY" \
   -d '{
-    "first_name": "Laura",
-    "last_name": "Bianchi",
+    "full_name": "Laura Bianchi",
     "email": "laura.bianchi@yahoo.it",
     "phone": "347 9876543",
     "category": "infissi",
     "province": "RM",
-    "country": "IT"
+    "country": "IT",
+    "request_text": "Richiesta preventivo infissi"
   }'
 ```
 
@@ -271,20 +277,20 @@ curl -X POST http://localhost:8000/api/import/lead \
 # Senza API key -> 401
 curl -X POST http://localhost:8000/api/import/lead \
   -H "Content-Type: application/json" \
-  -d '{"first_name": "Test"}'
+  -d '{"full_name": "Test"}'
 
-# Categoria inesistente -> 422
+# Categoria inattiva -> 422 (se inesistente viene auto-creata)
 curl -X POST http://localhost:8000/api/import/lead \
   -H "Content-Type: application/json" \
   -H "X-Api-Key: $API_KEY" \
   -d '{
-    "first_name": "Test",
-    "last_name": "Test",
+    "full_name": "Test Test",
     "email": "test@test.it",
     "phone": "333 0000000",
-    "category": "categoria-inesistente",
+    "category": "categoria-inattiva",
     "province": "MI",
-    "country": "IT"
+    "country": "IT",
+    "request_text": "test"
   }'
 ```
 
@@ -305,10 +311,10 @@ curl -X POST http://localhost:8000/api/import/lead \
 
 | Campo Delera | Campo API |
 |-------------|-----------|
-| Nome | `first_name` |
-| Cognome | `last_name` |
+| Nome + Cognome (concatenati) | `full_name` |
 | Email | `email` |
 | Telefono | `phone` |
+| Indirizzo (testo libero) | `address` |
 | Categoria | `category` |
 | Provincia | `province` |
 | Paese | `country` |
