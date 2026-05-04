@@ -25,6 +25,7 @@ class CartItem extends Model
         'lead_id',
         'purchase_mode',
         'price',
+        'is_free_trial',
         'added_at',
     ];
 
@@ -38,6 +39,7 @@ class CartItem extends Model
         return [
             'purchase_mode' => PurchaseMode::class,
             'price' => 'decimal:2',
+            'is_free_trial' => 'boolean',
             'added_at' => 'datetime',
         ];
     }

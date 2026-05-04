@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\LeadStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Category;
 use App\Models\Lead;
-use App\Models\Order;
 use App\Models\Province;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -34,8 +34,7 @@ class PublicCatalogController extends Controller
      */
     public function leads(Request $request): JsonResponse
     {
-        $query = Lead::where('status', 'free')
-            ->orWhere('status', 'sold_shared');
+        $query = Lead::query()->whereIn('status', ['free', 'sold_shared']);
 
         if ($request->filled('category_id')) {
             $query->whereHas('categories', function ($q) use ($request) {
@@ -47,10 +46,42 @@ class PublicCatalogController extends Controller
             $query->where('province_id', $request->input('province_id'));
         }
 
-        $leads = $query->with(['categories:id,name,slug', 'province:id,name,code'])
-            ->orderByDesc('generated_at')
-            ->paginate(15)
+        $availability = $request->input('availability');
+        if ($availability === 'exclusive') {
+            $query->where('status', 'free');
+        } elseif ($availability === 'shared') {
+            $query->where('status', 'sold_shared');
+        }
+
+        $sortOrder = $request->input('sort_order') === 'asc' ? 'asc' : 'desc';
+        $query->orderBy('generated_at', $sortOrder);
+
+        $perPage = (int) $request->input('per_page', 15);
+        if ($perPage < 1 || $perPage > 100) {
+            $perPage = 15;
+        }
+
+        $leads = $query->with([
+                'categories' => fn ($q) => $q->select('categories.id', 'name', 'slug', 'max_shares')->with('currentPrice'),
+                'province:id,name,code',
+            ])
+            ->paginate($perPage)
             ->through(function (Lead $lead) {
+                $category = $lead->categories->first();
+                $maxShares = (int) ($category?->max_shares ?? 3);
+                $currentShares = (int) ($lead->current_shares ?? 0);
+                $sharedSlotsAvailable = max(0, $maxShares - $currentShares);
+
+                $price = $category?->currentPrice;
+                $sharedPrices = array_values($price?->shared_prices ?? []);
+                $sharedSlotPrice = $sharedPrices[$currentShares] ?? $sharedPrices[0] ?? null;
+                $exclusivePrice = $price ? (float) $price->exclusive_price : null;
+
+                $isExclusiveAvailable = $lead->status === LeadStatus::Free;
+                $isAvailable = $isExclusiveAvailable || ($lead->status === LeadStatus::SoldShared && $sharedSlotsAvailable > 0);
+
+                $basePrice = $sharedSlotPrice !== null ? (float) $sharedSlotPrice : $exclusivePrice;
+
                 return [
                     'id' => $lead->id,
                     'categories' => $lead->categories,
@@ -58,7 +89,15 @@ class PublicCatalogController extends Controller
                     'request_preview' => Str::limit($lead->request_text, 80),
                     'generated_at' => $lead->generated_at,
                     'status' => $lead->status,
-                    'current_shares' => $lead->current_shares,
+                    'current_shares' => $currentShares,
+                    'max_shares' => $maxShares,
+                    'shared_slots_available' => $sharedSlotsAvailable,
+                    'shared_slots_total' => $maxShares,
+                    'is_exclusive_available' => $isExclusiveAvailable,
+                    'is_available' => $isAvailable,
+                    'exclusive_price' => $exclusivePrice,
+                    'shared_price' => $sharedSlotPrice !== null ? (float) $sharedSlotPrice : null,
+                    'base_price' => $basePrice,
                 ];
             });
 
@@ -95,9 +134,7 @@ class PublicCatalogController extends Controller
             'provinces_covered' => Province::where('is_active', true)
                 ->whereHas('leads', fn ($q) => $q->whereIn('status', ['free', 'sold_shared']))
                 ->count(),
-            'satisfied_clients' => Order::where('status', 'completed')
-                ->distinct('user_id')
-                ->count('user_id'),
+            'satisfied_clients' => 500,
         ];
 
         $featuredCategories = Category::where('is_active', true)

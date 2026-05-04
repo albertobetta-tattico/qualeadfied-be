@@ -6,6 +6,7 @@ enum PurchaseMode: string
 {
     case Exclusive = 'exclusive';
     case Shared = 'shared';
+    case Free = 'free';
 
     /**
      * @return array<string>

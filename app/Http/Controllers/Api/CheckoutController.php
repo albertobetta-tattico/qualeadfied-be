@@ -60,10 +60,34 @@ class CheckoutController extends Controller
             ]);
         }
 
-        $subtotal = $cartItems->sum('price');
+        $subtotal = (float) $cartItems->sum('price');
         $vatRate = 22;
         $vatAmount = round($subtotal * $vatRate / 100, 2);
         $total = round($subtotal + $vatAmount, 2);
+
+        $billingSnapshot = [
+            'company_name' => $user->clientProfile?->company_name ?? '',
+            'vat_number' => $user->clientProfile?->vat_number ?? '',
+            'address' => $request->billing_address,
+            'city' => $request->billing_city,
+            'province' => $request->billing_province,
+            'zip' => $request->billing_zip,
+            'country' => $request->billing_country,
+            'sdi_code' => $request->sdi_code,
+            'pec_email' => $request->pec_email,
+        ];
+
+        // Free-only cart: bypass Stripe, fulfill immediately
+        if ($total <= 0) {
+            $order = $this->fulfillFreeOrder($user, $cartItems, $billingSnapshot, $vatRate);
+
+            return response()->json(['data' => [
+                'client_secret' => null,
+                'amount' => 0,
+                'currency' => 'eur',
+                'free_order_id' => $order->id,
+            ]]);
+        }
 
         // Create Stripe PaymentIntent
         $stripe = new \Stripe\StripeClient(config('services.stripe.secret'));
@@ -76,30 +100,10 @@ class CheckoutController extends Controller
             ],
         ]);
 
-        // Create order with pending status
-        $order = DB::transaction(function () use ($user, $request, $cartItems, $subtotal, $vatRate, $vatAmount, $total, $paymentIntent) {
-            $orderNumber = 'ORD-' . date('Y') . '-' . str_pad(
-                Order::whereYear('created_at', date('Y'))->count() + 1,
-                5,
-                '0',
-                STR_PAD_LEFT
-            );
-
-            $billingSnapshot = [
-                'company_name' => $user->clientProfile?->company_name ?? '',
-                'vat_number' => $user->clientProfile?->vat_number ?? '',
-                'address' => $request->billing_address,
-                'city' => $request->billing_city,
-                'province' => $request->billing_province,
-                'zip' => $request->billing_zip,
-                'country' => $request->billing_country,
-                'sdi_code' => $request->sdi_code,
-                'pec_email' => $request->pec_email,
-            ];
-
+        DB::transaction(function () use ($user, $request, $cartItems, $subtotal, $vatRate, $vatAmount, $total, $paymentIntent, $billingSnapshot) {
             $order = Order::create([
                 'user_id' => $user->id,
-                'order_number' => $orderNumber,
+                'order_number' => $this->nextOrderNumber(),
                 'type' => OrderType::Single,
                 'payment_method' => $request->payment_method === 'card'
                     ? PaymentMethod::Card
@@ -114,9 +118,11 @@ class CheckoutController extends Controller
             ]);
 
             foreach ($cartItems as $cartItem) {
-                $acquisitionMode = $cartItem->purchase_mode->value === 'exclusive'
-                    ? AcquisitionMode::Exclusive
-                    : AcquisitionMode::Shared;
+                $acquisitionMode = $cartItem->is_free_trial
+                    ? AcquisitionMode::Free
+                    : ($cartItem->purchase_mode->value === 'exclusive'
+                        ? AcquisitionMode::Exclusive
+                        : AcquisitionMode::Shared);
 
                 OrderItem::create([
                     'order_id' => $order->id,
@@ -125,10 +131,9 @@ class CheckoutController extends Controller
                     'unit_price' => $cartItem->price,
                     'quantity' => 1,
                     'line_total' => $cartItem->price,
+                    'is_free_trial' => $cartItem->is_free_trial,
                 ]);
             }
-
-            return $order;
         });
 
         return response()->json(['data' => [
@@ -168,7 +173,6 @@ class CheckoutController extends Controller
                 'paid_at' => Carbon::now(),
             ]);
 
-            // Create transaction record
             Transaction::create([
                 'order_id' => $order->id,
                 'stripe_payment_intent_id' => $paymentIntent->id,
@@ -182,14 +186,20 @@ class CheckoutController extends Controller
                 'processed_at' => Carbon::now(),
             ]);
 
-            // Create UserLead for each order item
             $orderItems = $order->items()->with('lead')->get();
+            $freeTrialCount = 0;
             foreach ($orderItems as $item) {
                 if (!$item->lead_id) continue;
 
-                $acquisitionType = $item->acquisition_mode->value === 'exclusive'
-                    ? AcquisitionType::Exclusive
-                    : AcquisitionType::Shared;
+                $acquisitionType = $item->is_free_trial
+                    ? AcquisitionType::FreeTrial
+                    : ($item->acquisition_mode->value === 'exclusive'
+                        ? AcquisitionType::Exclusive
+                        : AcquisitionType::Shared);
+
+                if ($item->is_free_trial) {
+                    $freeTrialCount++;
+                }
 
                 UserLead::create([
                     'user_id' => $user->id,
@@ -202,12 +212,80 @@ class CheckoutController extends Controller
                 ]);
             }
 
-            // Clear cart
+            if ($freeTrialCount > 0 && $user->clientProfile) {
+                $user->clientProfile->decrement('free_trial_leads_remaining', $freeTrialCount);
+            }
+
             CartItem::where('user_id', $user->id)->delete();
         });
 
         return response()->json(['data' => [
             'order_id' => $order->id,
         ]]);
+    }
+
+    private function fulfillFreeOrder($user, $cartItems, array $billingSnapshot, int $vatRate): Order
+    {
+        return DB::transaction(function () use ($user, $cartItems, $billingSnapshot, $vatRate) {
+            $order = Order::create([
+                'user_id' => $user->id,
+                'order_number' => $this->nextOrderNumber(),
+                'type' => OrderType::FreeTrial,
+                'payment_method' => PaymentMethod::Free,
+                'subtotal' => 0,
+                'vat_rate' => $vatRate,
+                'vat_amount' => 0,
+                'total' => 0,
+                'status' => OrderStatus::Completed,
+                'billing_snapshot' => $billingSnapshot,
+                'paid_at' => Carbon::now(),
+            ]);
+
+            $freeTrialCount = 0;
+            foreach ($cartItems as $cartItem) {
+                $isFree = (bool) $cartItem->is_free_trial;
+                if ($isFree) {
+                    $freeTrialCount++;
+                }
+
+                OrderItem::create([
+                    'order_id' => $order->id,
+                    'lead_id' => $cartItem->lead_id,
+                    'acquisition_mode' => $isFree ? AcquisitionMode::Free : AcquisitionMode::Shared,
+                    'unit_price' => 0,
+                    'quantity' => 1,
+                    'line_total' => 0,
+                    'is_free_trial' => $isFree,
+                ]);
+
+                UserLead::create([
+                    'user_id' => $user->id,
+                    'lead_id' => $cartItem->lead_id,
+                    'order_id' => $order->id,
+                    'acquisition_type' => $isFree ? AcquisitionType::FreeTrial : AcquisitionType::Shared,
+                    'purchase_price' => 0,
+                    'contact_status' => ContactStatus::New,
+                    'purchased_at' => Carbon::now(),
+                ]);
+            }
+
+            if ($freeTrialCount > 0 && $user->clientProfile) {
+                $user->clientProfile->decrement('free_trial_leads_remaining', $freeTrialCount);
+            }
+
+            CartItem::where('user_id', $user->id)->delete();
+
+            return $order;
+        });
+    }
+
+    private function nextOrderNumber(): string
+    {
+        return 'ORD-' . date('Y') . '-' . str_pad(
+            (string) (Order::whereYear('created_at', date('Y'))->count() + 1),
+            5,
+            '0',
+            STR_PAD_LEFT
+        );
     }
 }

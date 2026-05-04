@@ -35,6 +35,7 @@ class OrderItem extends Model
         'unit_price',
         'quantity',
         'line_total',
+        'is_free_trial',
     ];
 
     /**
@@ -48,6 +49,7 @@ class OrderItem extends Model
             'acquisition_mode' => AcquisitionMode::class,
             'unit_price' => 'decimal:2',
             'line_total' => 'decimal:2',
+            'is_free_trial' => 'boolean',
         ];
     }
 
