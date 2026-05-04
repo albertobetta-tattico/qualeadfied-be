@@ -32,7 +32,32 @@ echo -e "${GREEN}=== Qualeadfied Deploy Script ===${NC}\n"
 # -----------------------------------------------
 echo -e "${YELLOW}[1/6] Building Nuxt frontend...${NC}"
 cd "$FRONTEND_DIR"
+
+# A running `nuxt dev` on this project poisons `nuxt generate`: the prerender
+# fetches the dev server, saves the dev shell (@vite/client + filesystem paths
+# like `/_nuxt/Users/.../node_modules/...`), and the deployed app is just a
+# white page in production. Stop any local dev servers tied to this project
+# before generating.
+DEV_PIDS=$(pgrep -f "$FRONTEND_DIR/node_modules/.bin/nuxt dev" 2>/dev/null || true)
+if [ -n "$DEV_PIDS" ]; then
+  echo "  Stopping local nuxt dev servers ($DEV_PIDS)..."
+  kill $DEV_PIDS 2>/dev/null || true
+  sleep 2
+  STILL=$(pgrep -f "$FRONTEND_DIR/node_modules/.bin/nuxt dev" 2>/dev/null || true)
+  [ -n "$STILL" ] && kill -9 $STILL 2>/dev/null || true
+fi
+
+# Wipe stale build outputs (.nuxt cache can also leak dev metadata)
+rm -rf "$FRONTEND_DIR/dist" "$FRONTEND_DIR/.output" "$FRONTEND_DIR/.nuxt"
+
 NUXT_PUBLIC_API_BASE=/api npx nuxt generate
+
+# Sanity-check: the prerendered shell must NOT contain the Vite dev client
+# nor filesystem paths. If it does, the build was poisoned by a dev server.
+if grep -q "@vite/client\|/_nuxt/Users/" "$FRONTEND_DIR/dist/index.html"; then
+  echo -e "${RED}  ✗ Build is poisoned (dev shell in dist/index.html). Aborting.${NC}"
+  exit 1
+fi
 echo -e "${GREEN}  ✓ Frontend built${NC}\n"
 
 # -----------------------------------------------
