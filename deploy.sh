@@ -273,13 +273,23 @@ $rmrf = function (string $path) use (&$rmrf): void {
     @rmdir($path);
 };
 $rmrf($root . '/_nuxt');
-// Wipe stale prerendered route directories from previous deploys
-// (older builds with crawlLinks: true generated admin/, dashboard/, etc.).
-// IMPORTANT: do NOT include 'public', 'app', 'bootstrap', 'config', 'database',
-// 'resources', 'routes', 'storage', 'vendor', 'lang' — those are Laravel dirs.
-foreach (['admin', 'dashboard', 'login', 'pacchetti', 'carrello', 'catalogo',
-         'i-miei-lead', 'checkout', 'auth', 'register', 'profilo'] as $stale) {
+// Wipe stale prerendered route directories from previous deploys.
+// Two layers:
+//  1) Explicit whitelist of every top-level Nuxt route currently in pages/.
+//  2) Dynamic sweep: any leftover top-level dir that contains an index.html
+//     (Laravel dirs — public, app, bootstrap, ... — never do, so they're safe).
+foreach (['admin', 'auth', 'carrello', 'catalogo', 'checkout', 'dashboard',
+         'form', 'i-miei-lead', 'leads', 'login', 'ordini', 'pacchetti',
+         'password-dimenticata', 'profilo', 'prova-gratuita', 'registrati',
+         'reset-password', 'verifica-email'] as $stale) {
     $rmrf($root . '/' . $stale);
+}
+foreach (scandir($root) ?: [] as $item) {
+    if ($item === '.' || $item === '..') continue;
+    $full = $root . '/' . $item;
+    if (is_dir($full) && is_file($full . '/index.html')) {
+        $rmrf($full);
+    }
 }
 foreach (['index.html', '200.html', '404.html', 'favicon.ico', 'favicon.png',
          'logo.png', 'logo-mini.png', 'robots.txt'] as $f) {
