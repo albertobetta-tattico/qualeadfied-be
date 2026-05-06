@@ -31,8 +31,10 @@ class ClientPackageController extends Controller
             ->orderBy('sort_order')
             ->get()
             ->map(function ($package) {
-                $exclusiveTotal = (float) $package->exclusive_price * $package->exclusive_lead_quantity;
-                $sharedTotal = (float) $package->shared_price * $package->shared_lead_quantity;
+                // exclusive_price / shared_price are bundle totals (admin form
+                // labels them "Prezzo Totale"), not unit prices.
+                $exclusiveTotal = (float) $package->exclusive_price;
+                $sharedTotal = (float) $package->shared_price;
                 $originalPrice = $exclusiveTotal + $sharedTotal;
                 $totalLeads = $package->exclusive_lead_quantity + $package->shared_lead_quantity;
 
@@ -73,9 +75,8 @@ class ClientPackageController extends Controller
             return response()->json(['message' => 'Package is not available'], 422);
         }
 
-        $exclusiveTotal = (float) $package->exclusive_price * $package->exclusive_lead_quantity;
-        $sharedTotal = (float) $package->shared_price * $package->shared_lead_quantity;
-        $subtotal = round($exclusiveTotal + $sharedTotal, 2);
+        // exclusive_price / shared_price are bundle totals, not unit prices.
+        $subtotal = round((float) $package->exclusive_price + (float) $package->shared_price, 2);
         $vatRate = 22;
         $vatAmount = round($subtotal * $vatRate / 100, 2);
         $total = round($subtotal + $vatAmount, 2);
