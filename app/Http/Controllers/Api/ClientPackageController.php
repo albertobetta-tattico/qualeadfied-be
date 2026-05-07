@@ -32,15 +32,12 @@ class ClientPackageController extends Controller
             ->get()
             ->map(function ($package) {
                 // exclusive_price / shared_price are bundle totals (admin form
-                // labels them "Prezzo Totale"), not unit prices.
+                // labels them "Prezzo Totale"), not unit prices. The price the
+                // admin sets IS the price the user pays — no automatic discount.
                 $exclusiveTotal = (float) $package->exclusive_price;
                 $sharedTotal = (float) $package->shared_price;
-                $originalPrice = $exclusiveTotal + $sharedTotal;
+                $price = round($exclusiveTotal + $sharedTotal, 2);
                 $totalLeads = $package->exclusive_lead_quantity + $package->shared_lead_quantity;
-
-                // Calculate discounted price (e.g. 15% off)
-                $discountPercent = 15;
-                $price = round($originalPrice * (1 - $discountPercent / 100), 2);
 
                 return [
                     'id' => $package->id,
@@ -51,8 +48,8 @@ class ClientPackageController extends Controller
                     'exclusive_leads' => $package->exclusive_lead_quantity,
                     'shared_leads' => $package->shared_lead_quantity,
                     'price' => $price,
-                    'discount_percent' => $discountPercent,
-                    'original_price' => round($originalPrice, 2),
+                    'discount_percent' => 0,
+                    'original_price' => $price,
                     'is_active' => $package->is_active,
                     'valid_days' => 30,
                 ];

@@ -50,7 +50,23 @@ fi
 # Wipe stale build outputs (.nuxt cache can also leak dev metadata)
 rm -rf "$FRONTEND_DIR/dist" "$FRONTEND_DIR/.output" "$FRONTEND_DIR/.nuxt"
 
-NUXT_PUBLIC_API_BASE=/api npx nuxt generate
+# Stripe publishable key must be baked into the SPA bundle at build time —
+# Vite inlines NUXT_PUBLIC_* env vars during `nuxt generate`. Without this the
+# checkout silently fails in prod with "Server error" because Stripe.js can't
+# init (`useStripe()` logs `NUXT_PUBLIC_STRIPE_PUBLIC_KEY is not configured`).
+# We source it from the frontend .env so dev and prod stay in sync.
+STRIPE_PK=""
+if [ -f "$FRONTEND_DIR/.env" ]; then
+  STRIPE_PK=$(grep -E '^NUXT_PUBLIC_STRIPE_PUBLIC_KEY=' "$FRONTEND_DIR/.env" | head -1 | cut -d= -f2- | tr -d '"' | tr -d "'")
+fi
+if [ -z "$STRIPE_PK" ]; then
+  echo -e "${RED}  ✗ NUXT_PUBLIC_STRIPE_PUBLIC_KEY missing in $FRONTEND_DIR/.env${NC}"
+  exit 1
+fi
+
+NUXT_PUBLIC_API_BASE=/api \
+  NUXT_PUBLIC_STRIPE_PUBLIC_KEY="$STRIPE_PK" \
+  npx nuxt generate
 
 # Sanity-check: the prerendered shell must NOT contain the Vite dev client
 # nor filesystem paths. If it does, the build was poisoned by a dev server.
