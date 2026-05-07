@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Order;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class OrderController extends Controller
 {
@@ -38,12 +39,15 @@ class OrderController extends Controller
             $query->where('payment_method', $request->input('payment_method'));
         }
 
+        // whereDate keeps the range inclusive on the end day. Otherwise
+        // `<= '2026-05-07'` is parsed as `<= '2026-05-07 00:00:00'` and
+        // silently drops every order from May 7.
         if ($request->filled('date_from')) {
-            $query->where('created_at', '>=', $request->input('date_from'));
+            $query->whereDate('created_at', '>=', $request->input('date_from'));
         }
 
         if ($request->filled('date_to')) {
-            $query->where('created_at', '<=', $request->input('date_to'));
+            $query->whereDate('created_at', '<=', $request->input('date_to'));
         }
 
         $sortBy = $request->input('sort_by', 'created_at');
@@ -51,7 +55,25 @@ class OrderController extends Controller
         $query->orderBy($sortBy, $sortOrder);
 
         $perPage = $request->input('per_page', 20);
-        return $this->paginatedResponse($query->paginate($perPage));
+        $paginator = $query->paginate($perPage);
+
+        // Flatten client info on each row (frontend Order type expects `client`).
+        $paginator->getCollection()->transform(function (Order $order) {
+            $profile = $order->user?->clientProfile;
+            $arr = $order->toArray();
+            $arr['client'] = $profile ? [
+                'id' => $order->user_id,
+                'company_name' => $profile->company_name ?? '',
+                'vat_number' => $profile->vat_number ?? '',
+                'email' => $order->user?->email ?? '',
+                'phone' => $profile->phone ?? '',
+                'contact_first_name' => $profile->first_name ?? '',
+                'contact_last_name' => $profile->last_name ?? '',
+            ] : null;
+            return $arr;
+        });
+
+        return $this->paginatedResponse($paginator);
     }
 
     public function show(Request $request, Order $order): JsonResponse
@@ -60,20 +82,109 @@ class OrderController extends Controller
 
         $data = $order->toArray();
 
+        // Flattened `client` block expected by the frontend (admin order detail
+        // tab "Cliente"). The backend internally has user.clientProfile, the FE
+        // type expects a single `client` object — without this mapping the tab
+        // shows "Dati cliente non disponibili" because order.client is missing.
+        $profile = $order->user?->clientProfile;
+        $data['client'] = $profile ? [
+            'id' => $order->user_id,
+            'company_name' => $profile->company_name ?? '',
+            'vat_number' => $profile->vat_number ?? '',
+            'email' => $order->user?->email ?? '',
+            'phone' => $profile->phone ?? '',
+            'contact_first_name' => $profile->first_name ?? '',
+            'contact_last_name' => $profile->last_name ?? '',
+        ] : null;
+
         // Add billing_data from snapshot or profile
         $data['billing_data'] = $order->billing_snapshot ?? [
-            'company_name' => $order->user?->clientProfile?->company_name ?? '',
-            'vat_number' => $order->user?->clientProfile?->vat_number ?? '',
-            'address' => $order->user?->clientProfile?->billing_address ?? '',
-            'city' => $order->user?->clientProfile?->billing_city ?? '',
-            'province' => $order->user?->clientProfile?->billing_province ?? '',
-            'zip' => $order->user?->clientProfile?->billing_zip ?? '',
-            'country' => $order->user?->clientProfile?->billing_country ?? 'IT',
-            'sdi_code' => $order->user?->clientProfile?->sdi_code,
-            'pec_email' => $order->user?->clientProfile?->pec_email,
+            'company_name' => $profile?->company_name ?? '',
+            'vat_number' => $profile?->vat_number ?? '',
+            'address' => $profile?->billing_address ?? '',
+            'city' => $profile?->billing_city ?? '',
+            'province' => $profile?->billing_province ?? '',
+            'zip' => $profile?->billing_zip ?? '',
+            'country' => $profile?->billing_country ?? 'IT',
+            'sdi_code' => $profile?->sdi_code,
+            'pec_email' => $profile?->pec_email,
         ];
 
         return response()->json(['data' => $data]);
+    }
+
+    /**
+     * Stream a CSV export of orders that match the same filters as `index`.
+     * Excel opens .csv natively (UTF-8 BOM ensures it preserves accents).
+     */
+    public function export(Request $request): StreamedResponse
+    {
+        $query = Order::query()->with(['user.clientProfile']);
+
+        $user = $request->user();
+        if ($user && $user->role?->value === 'client') {
+            $query->where('user_id', $user->id);
+        }
+
+        if ($request->filled('search')) {
+            $query->where('order_number', 'like', '%'.$request->input('search').'%');
+        }
+        if ($request->filled('status')) {
+            $query->where('status', $request->input('status'));
+        }
+        if ($request->filled('type') || $request->filled('order_type')) {
+            $type = $request->input('type') ?? $request->input('order_type');
+            $query->where('type', $type);
+        }
+        if ($request->filled('payment_method')) {
+            $query->where('payment_method', $request->input('payment_method'));
+        }
+        if ($request->filled('date_from')) {
+            $query->whereDate('created_at', '>=', $request->input('date_from'));
+        }
+        if ($request->filled('date_to')) {
+            $query->whereDate('created_at', '<=', $request->input('date_to'));
+        }
+        $query->orderByDesc('created_at');
+
+        $filename = 'ordini-' . now()->format('Y-m-d-His') . '.csv';
+
+        return response()->streamDownload(function () use ($query) {
+            $out = fopen('php://output', 'w');
+            // UTF-8 BOM so Excel recognises encoding
+            fwrite($out, "\xEF\xBB\xBF");
+
+            fputcsv($out, [
+                'Numero ordine', 'Tipo', 'Stato', 'Metodo pagamento',
+                'Cliente', 'P.IVA', 'Email',
+                'Subtotale', 'IVA', 'Totale',
+                'Pagato il', 'Creato il',
+            ], ';');
+
+            $query->chunk(200, function ($rows) use ($out) {
+                foreach ($rows as $order) {
+                    $profile = $order->user?->clientProfile;
+                    fputcsv($out, [
+                        $order->order_number,
+                        $order->type?->value ?? '',
+                        $order->status?->value ?? '',
+                        $order->payment_method?->value ?? '',
+                        trim(($profile?->company_name ?? '') ?: trim(($profile?->first_name ?? '') . ' ' . ($profile?->last_name ?? ''))),
+                        $profile?->vat_number ?? '',
+                        $order->user?->email ?? '',
+                        number_format((float) $order->subtotal, 2, ',', ''),
+                        number_format((float) $order->vat_amount, 2, ',', ''),
+                        number_format((float) $order->total, 2, ',', ''),
+                        $order->paid_at?->format('Y-m-d H:i:s') ?? '',
+                        $order->created_at?->format('Y-m-d H:i:s') ?? '',
+                    ], ';');
+                }
+            });
+
+            fclose($out);
+        }, $filename, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+        ]);
     }
 
     public function invoice(Request $request, Order $order): JsonResponse

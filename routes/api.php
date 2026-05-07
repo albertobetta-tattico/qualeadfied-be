@@ -213,6 +213,7 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
 
     // Orders - stats BEFORE other order routes
     Route::get('/orders/stats', [OrderController::class, 'stats']);
+    Route::get('/orders/export', [OrderController::class, 'export']);
     Route::get('/orders', [OrderController::class, 'index']);
     Route::get('/orders/{order}', [OrderController::class, 'show']);
     Route::get('/orders/{order}/items', [OrderItemController::class, 'index']);
@@ -236,6 +237,7 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
     Route::get('/pricing', [PricingController::class, 'index']);
     Route::get('/pricing/stats', [PricingController::class, 'stats']);
     Route::get('/pricing/history', [PricingController::class, 'history']);
+    Route::get('/pricing/history/export', [PricingController::class, 'exportHistory']);
     Route::get('/pricing/{categoryId}', [PricingController::class, 'show']);
     Route::put('/pricing/{categoryId}', [PricingController::class, 'update']);
 

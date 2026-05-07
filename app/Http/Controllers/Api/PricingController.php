@@ -102,6 +102,52 @@ class PricingController extends Controller
     }
 
     /**
+     * Stream a CSV export of the full price history.
+     */
+    public function exportHistory(Request $request): \Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        $query = CategoryPrice::with('category');
+        if ($request->filled('category_id')) {
+            $query->where('category_id', $request->input('category_id'));
+        }
+        $query->orderByDesc('created_at');
+
+        $filename = 'storico-prezzi-' . now()->format('Y-m-d-His') . '.csv';
+
+        return response()->streamDownload(function () use ($query) {
+            $out = fopen('php://output', 'w');
+            fwrite($out, "\xEF\xBB\xBF"); // UTF-8 BOM for Excel
+            fputcsv($out, [
+                'Categoria', 'Prezzo esclusivo',
+                'Slot 1', 'Slot 2', 'Slot 3', 'Slot 4',
+                'Valido dal', 'Valido al', 'Stato', 'Creato il',
+            ], ';');
+
+            $query->chunk(200, function ($rows) use ($out) {
+                foreach ($rows as $price) {
+                    $shared = array_values($price->shared_prices ?? []);
+                    fputcsv($out, [
+                        $price->category?->name ?? '',
+                        number_format((float) $price->exclusive_price, 2, ',', ''),
+                        isset($shared[0]) ? number_format((float) $shared[0], 2, ',', '') : '',
+                        isset($shared[1]) ? number_format((float) $shared[1], 2, ',', '') : '',
+                        isset($shared[2]) ? number_format((float) $shared[2], 2, ',', '') : '',
+                        isset($shared[3]) ? number_format((float) $shared[3], 2, ',', '') : '',
+                        $price->valid_from?->format('Y-m-d') ?? '',
+                        $price->valid_to?->format('Y-m-d') ?? '',
+                        $price->valid_to === null ? 'In vigore' : 'Scaduto',
+                        $price->created_at?->format('Y-m-d H:i:s') ?? '',
+                    ], ';');
+                }
+            });
+
+            fclose($out);
+        }, $filename, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+        ]);
+    }
+
+    /**
      * Pricing statistics.
      */
     public function stats(): JsonResponse

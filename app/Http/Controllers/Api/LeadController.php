@@ -35,16 +35,39 @@ class LeadController extends Controller
             $query->where('source_id', $request->input('source_id'));
         }
 
+        // Single combined free-text filter (sorgente / mezzo / campagna).
+        // Replaces the old "Fonte" dropdown that only listed Zapier.
+        if ($request->filled('source_text')) {
+            $needle = trim((string) $request->input('source_text'));
+            if ($needle !== '') {
+                $like = '%' . $needle . '%';
+                $query->where(function ($q) use ($like) {
+                    $q->where('medium', 'like', $like)
+                      ->orWhere('campaign', 'like', $like)
+                      ->orWhere('origin', 'like', $like)
+                      ->orWhereHas('source', function ($s) use ($like) {
+                          $s->where('name', 'like', $like);
+                      });
+                });
+            }
+        }
+
         if ($request->filled('status')) {
             $query->where('status', $request->input('status'));
         }
 
-        if ($request->filled('date_from')) {
-            $query->where('created_at', '>=', $request->input('date_from'));
+        // Frontend (admin/leads page) sends `generated_from` / `generated_to`,
+        // we also accept `date_from` / `date_to` for backward compatibility.
+        // Use whereDate to keep the range INCLUSIVE on the end day (otherwise
+        // `<= '2026-05-07'` is parsed as `<= '2026-05-07 00:00:00'` and silently
+        // drops every lead generated on May 7).
+        $generatedFrom = $request->input('generated_from') ?? $request->input('date_from');
+        if (!empty($generatedFrom)) {
+            $query->whereDate('generated_at', '>=', $generatedFrom);
         }
-
-        if ($request->filled('date_to')) {
-            $query->where('created_at', '<=', $request->input('date_to'));
+        $generatedTo = $request->input('generated_to') ?? $request->input('date_to');
+        if (!empty($generatedTo)) {
+            $query->whereDate('generated_at', '<=', $generatedTo);
         }
 
         if ($request->filled('country')) {
