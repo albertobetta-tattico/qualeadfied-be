@@ -333,13 +333,37 @@ foreach (['storage/app/public', 'storage/framework/cache/data', 'storage/framewo
 }
 echo "  OK\n";
 
-// Setup .env
+// Setup .env — first deploy creates from template, subsequent deploys MERGE
+// any new keys from the shipped template into the existing .env without
+// overwriting values already set on the server (DB credentials etc.).
 echo "[3/4] Environment...\n";
 if (file_exists("$root/.env.production") && !file_exists("$root/.env")) {
     copy("$root/.env.production", "$root/.env");
     echo "  Created .env from .env.production\n";
-} elseif (file_exists("$root/.env")) {
-    echo "  .env already exists (kept)\n";
+} elseif (file_exists("$root/.env") && file_exists("$root/.env.production")) {
+    $parseEnv = function (string $path): array {
+        $out = [];
+        foreach (file($path, FILE_IGNORE_NEW_LINES) ?: [] as $line) {
+            $line = ltrim($line);
+            if ($line === '' || $line[0] === '#' || strpos($line, '=') === false) continue;
+            [$k, $v] = array_map('trim', explode('=', $line, 2));
+            $out[$k] = $v;
+        }
+        return $out;
+    };
+    $current  = $parseEnv("$root/.env");
+    $template = $parseEnv("$root/.env.production");
+    $missing  = array_diff_key($template, $current);
+    if (!empty($missing)) {
+        $append = "\n# Added by deploy " . date('Y-m-d H:i:s') . "\n";
+        foreach ($missing as $k => $v) {
+            $append .= "{$k}={$v}\n";
+        }
+        file_put_contents("$root/.env", $append, FILE_APPEND);
+        echo "  Added " . count($missing) . " missing keys to .env: " . implode(', ', array_keys($missing)) . "\n";
+    } else {
+        echo "  .env up to date (kept)\n";
+    }
 }
 
 // Protect dirs

@@ -89,9 +89,16 @@ class CheckoutController extends Controller
             ]]);
         }
 
-        // Create Stripe PaymentIntent
-        $stripe = new \Stripe\StripeClient(config('services.stripe.secret'));
+        // Create Stripe PaymentIntent. Surface missing config as a clean 503
+        // (the SDK otherwise throws and Laravel returns a generic 500).
+        $stripeSecret = config('services.stripe.secret');
+        if (empty($stripeSecret)) {
+            return response()->json([
+                'message' => 'Servizio di pagamento non configurato. Contatta l\'amministratore.',
+            ], 503);
+        }
 
+        $stripe = new \Stripe\StripeClient($stripeSecret);
         $paymentIntent = $stripe->paymentIntents->create([
             'amount' => (int) round($total * 100),
             'currency' => 'eur',

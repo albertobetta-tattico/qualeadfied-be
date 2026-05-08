@@ -216,6 +216,7 @@ Route::middleware('auth:sanctum')->prefix('admin')->group(function () {
     Route::get('/orders/export', [OrderController::class, 'export']);
     Route::get('/orders', [OrderController::class, 'index']);
     Route::get('/orders/{order}', [OrderController::class, 'show']);
+    Route::post('/orders/{order}/confirm-payment', [OrderController::class, 'confirmManually']);
     Route::get('/orders/{order}/items', [OrderItemController::class, 'index']);
 
     // Lead sales

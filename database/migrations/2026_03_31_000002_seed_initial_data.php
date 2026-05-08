@@ -61,6 +61,41 @@ return new class extends Migration
             ]);
         }
 
+        // ── User test2 (per verifiche acquisti condivisi multi-utente) ──
+        if (! DB::table('users')->where('email', 'test2@qualeadfied.com')->exists()) {
+            $user2Id = DB::table('users')->insertGetId([
+                'email'             => 'test2@qualeadfied.com',
+                'password'          => Hash::make('Passw0rd!'),
+                'role'              => 'client',
+                'status'            => 'active',
+                'email_verified_at' => now(),
+                'created_at'        => now(),
+                'updated_at'        => now(),
+            ]);
+
+            DB::table('client_profiles')->insert([
+                'user_id'                     => $user2Id,
+                'company_name'                => 'Test Two S.r.l.',
+                'vat_number'                  => 'IT99999999999',
+                'phone'                       => '+39 02 9999999',
+                'first_name'                  => 'Test',
+                'last_name'                   => 'Two',
+                'billing_address'             => 'Via Test 2',
+                'billing_city'                => 'Roma',
+                'billing_province'            => 'RM',
+                'billing_zip'                 => '00100',
+                'billing_country'             => 'IT',
+                'sdi_code'                    => '0000000',
+                'pec_email'                   => 'test2@pec.it',
+                'free_trial_enabled'          => true,
+                'free_trial_leads_remaining'  => 3,
+                'email_notifications_enabled' => true,
+                'marketing_consent'           => false,
+                'created_at'                  => now(),
+                'updated_at'                  => now(),
+            ]);
+        }
+
         // ── Categorie base ───────────────────────────────────────────────
         DB::table('categories')->insertOrIgnore([
             [

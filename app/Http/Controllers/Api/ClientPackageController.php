@@ -78,9 +78,16 @@ class ClientPackageController extends Controller
         $vatAmount = round($subtotal * $vatRate / 100, 2);
         $total = round($subtotal + $vatAmount, 2);
 
-        // Create Stripe PaymentIntent
-        $stripe = new \Stripe\StripeClient(config('services.stripe.secret'));
+        // Create Stripe PaymentIntent. Without a configured secret the
+        // SDK throws and Laravel returns 500 — we surface a clean 503 instead.
+        $stripeSecret = config('services.stripe.secret');
+        if (empty($stripeSecret)) {
+            return response()->json([
+                'message' => 'Servizio di pagamento non configurato. Contatta l\'amministratore.',
+            ], 503);
+        }
 
+        $stripe = new \Stripe\StripeClient($stripeSecret);
         $paymentIntent = $stripe->paymentIntents->create([
             'amount' => (int) round($total * 100),
             'currency' => 'eur',

@@ -2,10 +2,22 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\AcquisitionType;
+use App\Enums\ContactStatus;
+use App\Enums\OrderStatus;
+use App\Enums\PackageStatus;
+use App\Enums\TransactionPaymentType;
+use App\Enums\TransactionStatus;
 use App\Http\Controllers\Controller;
+use App\Models\CartItem;
 use App\Models\Order;
+use App\Models\Transaction;
+use App\Models\UserLead;
+use App\Models\UserPackage;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class OrderController extends Controller
@@ -185,6 +197,104 @@ class OrderController extends Controller
         }, $filename, [
             'Content-Type' => 'text/csv; charset=UTF-8',
         ]);
+    }
+
+    /**
+     * Mark a pending order as paid manually (admin only).
+     *
+     * Used for bonifico bancario (SEPA) orders where Stripe doesn't auto-confirm
+     * — the admin verifies the wire on the bank statement and clicks "Conferma
+     * pagamento" in the order detail page. Mirrors the post-payment fulfilment
+     * logic of CheckoutController::confirm and ClientPackageController::
+     * confirmPurchase, minus the Stripe round-trip.
+     */
+    public function confirmManually(Request $request, Order $order): JsonResponse
+    {
+        $user = $request->user();
+        if (($user->role?->value ?? null) !== 'admin' && ($user->role?->value ?? null) !== 'super_admin') {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        if ($order->status !== OrderStatus::Pending) {
+            return response()->json([
+                'message' => 'Solo gli ordini in attesa possono essere confermati manualmente.',
+            ], 422);
+        }
+
+        DB::transaction(function () use ($order) {
+            $order->update([
+                'status' => OrderStatus::Paid,
+                'paid_at' => Carbon::now(),
+            ]);
+
+            Transaction::create([
+                'order_id' => $order->id,
+                'stripe_payment_intent_id' => null,
+                'stripe_charge_id' => null,
+                'payment_type' => TransactionPaymentType::SepaDebit,
+                'amount' => $order->total,
+                'currency' => 'eur',
+                'status' => TransactionStatus::Succeeded,
+                'processed_at' => Carbon::now(),
+            ]);
+
+            $orderItems = $order->items()->with('lead')->get();
+            $freeTrialCount = 0;
+
+            foreach ($orderItems as $item) {
+                if ($item->lead_id) {
+                    $acquisitionType = $item->is_free_trial
+                        ? AcquisitionType::FreeTrial
+                        : ($item->acquisition_mode?->value === 'exclusive'
+                            ? AcquisitionType::Exclusive
+                            : AcquisitionType::Shared);
+
+                    if ($item->is_free_trial) {
+                        $freeTrialCount++;
+                    }
+
+                    UserLead::firstOrCreate(
+                        ['user_id' => $order->user_id, 'lead_id' => $item->lead_id],
+                        [
+                            'order_id' => $order->id,
+                            'acquisition_type' => $acquisitionType,
+                            'purchase_price' => $item->unit_price,
+                            'contact_status' => ContactStatus::New,
+                            'purchased_at' => Carbon::now(),
+                        ]
+                    );
+                }
+
+                if ($item->package_id) {
+                    $package = $item->package()->first();
+                    if ($package) {
+                        UserPackage::firstOrCreate(
+                            ['user_id' => $order->user_id, 'order_id' => $order->id, 'package_id' => $package->id],
+                            [
+                                'package_name' => $package->name,
+                                'category_id' => $package->category_ids[0] ?? null,
+                                'total_leads' => $package->exclusive_lead_quantity + $package->shared_lead_quantity,
+                                'exclusive_leads_total' => $package->exclusive_lead_quantity,
+                                'exclusive_leads_used' => 0,
+                                'shared_leads_total' => $package->shared_lead_quantity,
+                                'shared_leads_used' => 0,
+                                'status' => PackageStatus::Active,
+                                'purchased_at' => Carbon::now(),
+                                'expires_at' => Carbon::now()->addDays(30),
+                            ]
+                        );
+                    }
+                }
+            }
+
+            if ($freeTrialCount > 0 && $order->user?->clientProfile) {
+                $order->user->clientProfile->decrement('free_trial_leads_remaining', $freeTrialCount);
+            }
+
+            CartItem::where('user_id', $order->user_id)->delete();
+        });
+
+        return response()->json(['data' => ['order_id' => $order->id, 'status' => 'paid']]);
     }
 
     public function invoice(Request $request, Order $order): JsonResponse
