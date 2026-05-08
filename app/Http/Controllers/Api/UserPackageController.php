@@ -12,7 +12,7 @@ class UserPackageController extends Controller
     public function index(Request $request): JsonResponse
     {
         $packages = UserPackage::where('user_id', $request->user()->id)
-            ->with('package')
+            ->with(['package', 'category'])
             ->orderByDesc('purchased_at')
             ->get();
 
@@ -21,7 +21,7 @@ class UserPackageController extends Controller
 
     public function show(Request $request, UserPackage $userPackage): JsonResponse
     {
-        $userPackage->load('package');
+        $userPackage->load(['package', 'category']);
 
         $stats = [
             'exclusive_remaining' => $userPackage->exclusive_leads_total - $userPackage->exclusive_leads_used,
