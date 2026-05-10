@@ -236,8 +236,13 @@ class ClientPackageController extends Controller
         $request->validate([
             'lead_ids' => 'required|array|min:1',
             'lead_ids.*' => 'required|integer|exists:leads,id',
-            'purchase_modes' => 'required|array',
-            'purchase_modes.*' => 'required|in:exclusive,shared',
+            // purchase_modes is now an OPTIONAL hint. The server reserves the
+            // right to override per-lead if the requested mode has no slot
+            // left in the package (e.g. user picks 3 leads as "shared" but
+            // the package only has exclusive slots remaining — we silently
+            // allocate them as exclusive instead of failing).
+            'purchase_modes' => 'sometimes|array',
+            'purchase_modes.*' => 'sometimes|in:exclusive,shared',
         ]);
 
         $user = $request->user();
@@ -247,26 +252,17 @@ class ClientPackageController extends Controller
             ->firstOrFail();
 
         $leadIds = $request->input('lead_ids');
-        $purchaseModes = $request->input('purchase_modes');
+        $purchaseModes = $request->input('purchase_modes', []);
 
-        // Count requested by mode
-        $exclusiveRequested = 0;
-        $sharedRequested = 0;
-        foreach ($leadIds as $leadId) {
-            $mode = $purchaseModes[$leadId] ?? 'shared';
-            if ($mode === 'exclusive') {
-                $exclusiveRequested++;
-            } else {
-                $sharedRequested++;
-            }
-        }
+        $exclusiveRemaining = max(0, $userPackage->exclusive_leads_total - $userPackage->exclusive_leads_used);
+        $sharedRemaining = max(0, $userPackage->shared_leads_total - $userPackage->shared_leads_used);
+        $totalRemaining = $exclusiveRemaining + $sharedRemaining;
 
-        $exclusiveRemaining = $userPackage->exclusive_leads_total - $userPackage->exclusive_leads_used;
-        $sharedRemaining = $userPackage->shared_leads_total - $userPackage->shared_leads_used;
-
-        if ($exclusiveRequested > $exclusiveRemaining || $sharedRequested > $sharedRemaining) {
+        if (count($leadIds) > $totalRemaining) {
             return response()->json([
                 'message' => 'Not enough leads remaining in package',
+                'requested' => count($leadIds),
+                'remaining' => $totalRemaining,
             ], 422);
         }
 
@@ -282,9 +278,29 @@ class ClientPackageController extends Controller
             ], 422);
         }
 
-        DB::transaction(function () use ($user, $userPackage, $leadIds, $purchaseModes) {
+        // Auto-allocate: respect the user's hint when possible, otherwise fall
+        // back to whichever slot type still has capacity. We keep two running
+        // counters and decrement them as we assign each lead.
+        DB::transaction(function () use ($user, $userPackage, $leadIds, $purchaseModes, &$exclusiveRemaining, &$sharedRemaining) {
             foreach ($leadIds as $leadId) {
-                $mode = $purchaseModes[$leadId] ?? 'shared';
+                $hinted = $purchaseModes[$leadId] ?? 'shared';
+
+                // Pick the actual mode based on remaining capacity, preferring
+                // the hinted one. Falls back to the other if the hint is full.
+                if ($hinted === 'shared' && $sharedRemaining > 0) {
+                    $mode = 'shared';
+                } elseif ($hinted === 'exclusive' && $exclusiveRemaining > 0) {
+                    $mode = 'exclusive';
+                } elseif ($sharedRemaining > 0) {
+                    $mode = 'shared';
+                } elseif ($exclusiveRemaining > 0) {
+                    $mode = 'exclusive';
+                } else {
+                    // Should never happen because of the totalRemaining check
+                    // above, but guard anyway.
+                    throw new \RuntimeException('Package capacity exhausted mid-transaction');
+                }
+
                 $acquisitionType = $mode === 'exclusive'
                     ? AcquisitionType::Exclusive
                     : AcquisitionType::Shared;
@@ -301,16 +317,18 @@ class ClientPackageController extends Controller
 
                 if ($mode === 'exclusive') {
                     $userPackage->increment('exclusive_leads_used');
+                    $exclusiveRemaining--;
                 } else {
                     $userPackage->increment('shared_leads_used');
+                    $sharedRemaining--;
                 }
             }
 
             // Check if package is exhausted
             $userPackage->refresh();
-            $totalRemaining = ($userPackage->exclusive_leads_total - $userPackage->exclusive_leads_used)
+            $totalRemainingDb = ($userPackage->exclusive_leads_total - $userPackage->exclusive_leads_used)
                 + ($userPackage->shared_leads_total - $userPackage->shared_leads_used);
-            if ($totalRemaining <= 0) {
+            if ($totalRemainingDb <= 0) {
                 $userPackage->update(['status' => PackageStatus::Exhausted]);
             }
         });
