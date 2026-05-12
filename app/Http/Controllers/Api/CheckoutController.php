@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\CartItem;
+use App\Models\Lead;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\UserLead;
@@ -11,6 +12,7 @@ use App\Models\Transaction;
 use App\Enums\AcquisitionMode;
 use App\Enums\AcquisitionType;
 use App\Enums\ContactStatus;
+use App\Enums\LeadStatus;
 use App\Enums\OrderType;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentMethod;
@@ -217,6 +219,8 @@ class CheckoutController extends Controller
                     'contact_status' => ContactStatus::New,
                     'purchased_at' => Carbon::now(),
                 ]);
+
+                $this->applyLeadStatusAfterPurchase($item->lead, $acquisitionType);
             }
 
             if ($freeTrialCount > 0 && $user->clientProfile) {
@@ -229,6 +233,33 @@ class CheckoutController extends Controller
         return response()->json(['data' => [
             'order_id' => $order->id,
         ]]);
+    }
+
+    /**
+     * Update Lead.status / current_shares after a UserLead has been created.
+     * Exclusive → lead is locked out. Shared/FreeTrial → bump the shares
+     * counter and flip the status when the lead saturates max_shares.
+     */
+    private function applyLeadStatusAfterPurchase(?Lead $lead, AcquisitionType $type): void
+    {
+        if (!$lead) {
+            return;
+        }
+
+        if ($type === AcquisitionType::Exclusive) {
+            $lead->update(['status' => LeadStatus::SoldExclusive]);
+            return;
+        }
+
+        $maxShares = (int) ($lead->categories()->first()?->max_shares ?? 3);
+        $lead->increment('current_shares');
+        $lead->refresh();
+
+        if ($lead->current_shares >= $maxShares) {
+            $lead->update(['status' => LeadStatus::Exhausted]);
+        } elseif ($lead->status === LeadStatus::Free) {
+            $lead->update(['status' => LeadStatus::SoldShared]);
+        }
     }
 
     private function fulfillFreeOrder($user, $cartItems, array $billingSnapshot, int $vatRate): Order
@@ -265,15 +296,19 @@ class CheckoutController extends Controller
                     'is_free_trial' => $isFree,
                 ]);
 
+                $acquisitionType = $isFree ? AcquisitionType::FreeTrial : AcquisitionType::Shared;
+
                 UserLead::create([
                     'user_id' => $user->id,
                     'lead_id' => $cartItem->lead_id,
                     'order_id' => $order->id,
-                    'acquisition_type' => $isFree ? AcquisitionType::FreeTrial : AcquisitionType::Shared,
+                    'acquisition_type' => $acquisitionType,
                     'purchase_price' => 0,
                     'contact_status' => ContactStatus::New,
                     'purchased_at' => Carbon::now(),
                 ]);
+
+                $this->applyLeadStatusAfterPurchase($cartItem->lead, $acquisitionType);
             }
 
             if ($freeTrialCount > 0 && $user->clientProfile) {

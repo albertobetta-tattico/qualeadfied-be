@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Lead;
 use App\Models\Order;
 use App\Models\Package;
 use App\Models\Transaction;
@@ -10,6 +11,7 @@ use App\Models\UserLead;
 use App\Models\UserPackage;
 use App\Enums\AcquisitionType;
 use App\Enums\ContactStatus;
+use App\Enums\LeadStatus;
 use App\Enums\OrderStatus;
 use App\Enums\OrderType;
 use App\Enums\PackageStatus;
@@ -170,7 +172,7 @@ class StripeWebhookController extends Controller
             return;
         }
 
-        $orderItems = $order->items()->whereNotNull('lead_id')->get();
+        $orderItems = $order->items()->whereNotNull('lead_id')->with('lead')->get();
         foreach ($orderItems as $item) {
             $acquisitionType = $item->acquisition_mode->value === 'exclusive'
                 ? AcquisitionType::Exclusive
@@ -185,9 +187,38 @@ class StripeWebhookController extends Controller
                 'contact_status' => ContactStatus::New,
                 'purchased_at' => Carbon::now(),
             ]);
+
+            $this->applyLeadStatusAfterPurchase($item->lead, $acquisitionType);
         }
 
         // Clear cart items
         \App\Models\CartItem::where('user_id', $order->user_id)->delete();
+    }
+
+    /**
+     * Mirror of CheckoutController::applyLeadStatusAfterPurchase — kept here
+     * so the webhook fulfillment path stays consistent with the synchronous
+     * `confirm` flow when Stripe delivers the event before/instead of it.
+     */
+    private function applyLeadStatusAfterPurchase(?Lead $lead, AcquisitionType $type): void
+    {
+        if (!$lead) {
+            return;
+        }
+
+        if ($type === AcquisitionType::Exclusive) {
+            $lead->update(['status' => LeadStatus::SoldExclusive]);
+            return;
+        }
+
+        $maxShares = (int) ($lead->categories()->first()?->max_shares ?? 3);
+        $lead->increment('current_shares');
+        $lead->refresh();
+
+        if ($lead->current_shares >= $maxShares) {
+            $lead->update(['status' => LeadStatus::Exhausted]);
+        } elseif ($lead->status === LeadStatus::Free) {
+            $lead->update(['status' => LeadStatus::SoldShared]);
+        }
     }
 }

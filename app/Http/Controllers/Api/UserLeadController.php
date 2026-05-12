@@ -41,8 +41,7 @@ class UserLeadController extends Controller
         if ($request->filled('search')) {
             $search = $request->input('search');
             $query->whereHas('lead', function ($q) use ($search) {
-                $q->where('first_name', 'like', "%{$search}%")
-                    ->orWhere('last_name', 'like', "%{$search}%")
+                $q->where('full_name', 'like', "%{$search}%")
                     ->orWhere('email', 'like', "%{$search}%");
             });
         }

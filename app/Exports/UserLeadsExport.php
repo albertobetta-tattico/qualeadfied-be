@@ -47,8 +47,7 @@ class UserLeadsExport implements FromQuery, WithHeadings, WithMapping
     {
         return [
             'ID',
-            'Nome',
-            'Cognome',
+            'Nome e Cognome',
             'Email',
             'Telefono',
             'Categoria',
@@ -66,8 +65,7 @@ class UserLeadsExport implements FromQuery, WithHeadings, WithMapping
     {
         return [
             $userLead->id,
-            $userLead->lead?->first_name ?? '',
-            $userLead->lead?->last_name ?? '',
+            $userLead->lead?->full_name ?? '',
             $userLead->lead?->email ?? '',
             $userLead->lead?->phone ?? '',
             $userLead->lead?->categories->pluck('name')->implode(', ') ?? '',

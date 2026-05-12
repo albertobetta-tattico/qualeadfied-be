@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Lead;
 use App\Models\Package;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -12,6 +13,7 @@ use App\Models\UserLead;
 use App\Enums\AcquisitionMode;
 use App\Enums\AcquisitionType;
 use App\Enums\ContactStatus;
+use App\Enums\LeadStatus;
 use App\Enums\OrderType;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentMethod;
@@ -278,6 +280,21 @@ class ClientPackageController extends Controller
             ], 422);
         }
 
+        // Defensive check: if the package is scoped to a category, every
+        // submitted lead must belong to that category. Without this guard the
+        // frontend could (accidentally or otherwise) feed cross-category leads
+        // into the package's slots.
+        if ($userPackage->category_id) {
+            $validCount = Lead::whereIn('id', $leadIds)
+                ->whereHas('categories', fn ($q) => $q->where('categories.id', $userPackage->category_id))
+                ->count();
+            if ($validCount !== count($leadIds)) {
+                return response()->json([
+                    'message' => 'Some leads do not belong to the package category',
+                ], 422);
+            }
+        }
+
         // Auto-allocate: respect the user's hint when possible, otherwise fall
         // back to whichever slot type still has capacity. We keep two running
         // counters and decrement them as we assign each lead.
@@ -315,6 +332,8 @@ class ClientPackageController extends Controller
                     'purchased_at' => Carbon::now(),
                 ]);
 
+                $this->applyLeadStatusAfterPurchase($leadId, $acquisitionType);
+
                 if ($mode === 'exclusive') {
                     $userPackage->increment('exclusive_leads_used');
                     $exclusiveRemaining--;
@@ -334,5 +353,34 @@ class ClientPackageController extends Controller
         });
 
         return response()->json(['message' => 'Leads selected successfully']);
+    }
+
+    /**
+     * Mirror of CheckoutController::applyLeadStatusAfterPurchase — when a
+     * package redemption assigns a lead, the lead itself must reflect that:
+     * exclusive locks it out, shared bumps current_shares and flips status
+     * once max_shares is reached.
+     */
+    private function applyLeadStatusAfterPurchase(int $leadId, AcquisitionType $type): void
+    {
+        $lead = Lead::find($leadId);
+        if (!$lead) {
+            return;
+        }
+
+        if ($type === AcquisitionType::Exclusive) {
+            $lead->update(['status' => LeadStatus::SoldExclusive]);
+            return;
+        }
+
+        $maxShares = (int) ($lead->categories()->first()?->max_shares ?? 3);
+        $lead->increment('current_shares');
+        $lead->refresh();
+
+        if ($lead->current_shares >= $maxShares) {
+            $lead->update(['status' => LeadStatus::Exhausted]);
+        } elseif ($lead->status === LeadStatus::Free) {
+            $lead->update(['status' => LeadStatus::SoldShared]);
+        }
     }
 }

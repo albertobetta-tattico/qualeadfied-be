@@ -53,6 +53,26 @@ class PublicCatalogController extends Controller
             $query->where('status', 'sold_shared');
         }
 
+        // Date range on Lead.generated_at — accept both naming conventions
+        // (the catalog UI sends `date_from`/`date_to`, the admin list uses
+        // `generated_from`/`generated_to`).
+        $generatedFrom = $request->input('generated_from') ?? $request->input('date_from');
+        if (!empty($generatedFrom)) {
+            $query->whereDate('generated_at', '>=', $generatedFrom);
+        }
+        $generatedTo = $request->input('generated_to') ?? $request->input('date_to');
+        if (!empty($generatedTo)) {
+            $query->whereDate('generated_at', '<=', $generatedTo);
+        }
+
+        // Hide leads the authenticated user already owns. The route is public,
+        // so Sanctum doesn't run automatically — resolve the guard manually
+        // and skip the filter for guests.
+        $user = $request->user() ?? auth('sanctum')->user();
+        if ($user) {
+            $query->whereDoesntHave('userLeads', fn ($q) => $q->where('user_id', $user->id));
+        }
+
         $sortOrder = $request->input('sort_order') === 'asc' ? 'asc' : 'desc';
         $query->orderBy('generated_at', $sortOrder);
 
