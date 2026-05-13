@@ -4,11 +4,13 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Lead;
+use App\Models\LeadSale;
 use App\Models\Order;
 use App\Models\Package;
 use App\Models\Transaction;
 use App\Models\UserLead;
 use App\Models\UserPackage;
+use App\Enums\AcquisitionMode;
 use App\Enums\AcquisitionType;
 use App\Enums\ContactStatus;
 use App\Enums\LeadStatus;
@@ -188,6 +190,7 @@ class StripeWebhookController extends Controller
                 'purchased_at' => Carbon::now(),
             ]);
 
+            $this->recordLeadSale($item->lead, $order->user_id, $order->id, null, $acquisitionType, (float) $item->unit_price);
             $this->applyLeadStatusAfterPurchase($item->lead, $acquisitionType);
         }
 
@@ -220,5 +223,37 @@ class StripeWebhookController extends Controller
         } elseif ($lead->status === LeadStatus::Free) {
             $lead->update(['status' => LeadStatus::SoldShared]);
         }
+    }
+
+    /**
+     * Mirror of CheckoutController::recordLeadSale — appends to lead_sales,
+     * the analytical log used by the Report dashboard.
+     */
+    private function recordLeadSale(?Lead $lead, int $userId, ?int $orderId, ?int $userPackageId, AcquisitionType $type, float $pricePaid): void
+    {
+        if (!$lead) {
+            return;
+        }
+
+        $mode = match ($type) {
+            AcquisitionType::Exclusive => AcquisitionMode::Exclusive,
+            AcquisitionType::Shared => AcquisitionMode::Shared,
+            AcquisitionType::FreeTrial => AcquisitionMode::Free,
+        };
+
+        $shareSlot = $mode === AcquisitionMode::Exclusive
+            ? null
+            : ((int) $lead->fresh()->current_shares) + 1;
+
+        LeadSale::create([
+            'lead_id' => $lead->id,
+            'user_id' => $userId,
+            'order_id' => $orderId,
+            'user_package_id' => $userPackageId,
+            'mode' => $mode,
+            'share_slot' => $shareSlot,
+            'price_paid' => $pricePaid,
+            'sold_at' => Carbon::now(),
+        ]);
     }
 }

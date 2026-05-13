@@ -11,7 +11,16 @@ class CategoryController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $query = Category::with('currentPrice');
+        // `leads_count` = totale lead assegnati alla categoria (qualsiasi stato),
+        // `available_leads_count` = lead ancora acquistabili (free + sold_shared).
+        // Il FE legge entrambi per costruire la stringa "X / Y" nella tabella.
+        $query = Category::with('currentPrice')
+            ->withCount([
+                'leads as leads_count',
+                'leads as available_leads_count' => function ($q) {
+                    $q->whereIn('leads.status', ['free', 'sold_shared']);
+                },
+            ]);
 
         if ($request->filled('search')) {
             $query->where('name', 'like', '%'.$request->input('search').'%');

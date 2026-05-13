@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Lead;
+use App\Models\LeadSale;
 use App\Models\Package;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -332,6 +333,7 @@ class ClientPackageController extends Controller
                     'purchased_at' => Carbon::now(),
                 ]);
 
+                $this->recordLeadSaleForPackage($leadId, $user->id, $userPackage->order_id, $userPackage->id, $acquisitionType);
                 $this->applyLeadStatusAfterPurchase($leadId, $acquisitionType);
 
                 if ($mode === 'exclusive') {
@@ -382,5 +384,40 @@ class ClientPackageController extends Controller
         } elseif ($lead->status === LeadStatus::Free) {
             $lead->update(['status' => LeadStatus::SoldShared]);
         }
+    }
+
+    /**
+     * Mirror of CheckoutController::recordLeadSale — log per il dashboard
+     * analitico. Le redenzioni da pacchetto hanno price_paid=0 (il prezzo
+     * è già stato versato all'acquisto del pacchetto) e portano l'id del
+     * UserPackage per poter risalire alla campagna di provenienza.
+     */
+    private function recordLeadSaleForPackage(int $leadId, int $userId, ?int $orderId, int $userPackageId, AcquisitionType $type): void
+    {
+        $lead = Lead::find($leadId);
+        if (!$lead) {
+            return;
+        }
+
+        $mode = match ($type) {
+            AcquisitionType::Exclusive => AcquisitionMode::Exclusive,
+            AcquisitionType::Shared => AcquisitionMode::Shared,
+            AcquisitionType::FreeTrial => AcquisitionMode::Free,
+        };
+
+        $shareSlot = $mode === AcquisitionMode::Exclusive
+            ? null
+            : ((int) $lead->current_shares) + 1;
+
+        LeadSale::create([
+            'lead_id' => $leadId,
+            'user_id' => $userId,
+            'order_id' => $orderId,
+            'user_package_id' => $userPackageId,
+            'mode' => $mode,
+            'share_slot' => $shareSlot,
+            'price_paid' => 0,
+            'sold_at' => Carbon::now(),
+        ]);
     }
 }

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\CartItem;
 use App\Models\Lead;
+use App\Models\LeadSale;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\UserLead;
@@ -220,6 +221,7 @@ class CheckoutController extends Controller
                     'purchased_at' => Carbon::now(),
                 ]);
 
+                $this->recordLeadSale($item->lead, $user->id, $order->id, null, $acquisitionType, (float) $item->unit_price);
                 $this->applyLeadStatusAfterPurchase($item->lead, $acquisitionType);
             }
 
@@ -260,6 +262,45 @@ class CheckoutController extends Controller
         } elseif ($lead->status === LeadStatus::Free) {
             $lead->update(['status' => LeadStatus::SoldShared]);
         }
+    }
+
+    /**
+     * Append a row to `lead_sales` after every successful acquisition.
+     * It's the analytical log used by the Report dashboard — UserLead alone
+     * isn't enough because shared leads can have multiple sales (one per
+     * slot) while UserLead has a unique (user_id, lead_id) constraint.
+     */
+    private function recordLeadSale(?Lead $lead, int $userId, ?int $orderId, ?int $userPackageId, AcquisitionType $type, float $pricePaid): void
+    {
+        if (!$lead) {
+            return;
+        }
+
+        $mode = match ($type) {
+            AcquisitionType::Exclusive => AcquisitionMode::Exclusive,
+            AcquisitionType::Shared => AcquisitionMode::Shared,
+            AcquisitionType::FreeTrial => AcquisitionMode::Free,
+        };
+
+        $shareSlot = null;
+        if ($mode !== AcquisitionMode::Exclusive) {
+            // current_shares is already the post-increment value when
+            // this is called after applyLeadStatusAfterPurchase, but it
+            // hasn't been called yet at this point — so the slot we just
+            // sold is `current_shares + 1` (the count we're about to bump).
+            $shareSlot = ((int) $lead->fresh()->current_shares) + 1;
+        }
+
+        LeadSale::create([
+            'lead_id' => $lead->id,
+            'user_id' => $userId,
+            'order_id' => $orderId,
+            'user_package_id' => $userPackageId,
+            'mode' => $mode,
+            'share_slot' => $shareSlot,
+            'price_paid' => $pricePaid,
+            'sold_at' => Carbon::now(),
+        ]);
     }
 
     private function fulfillFreeOrder($user, $cartItems, array $billingSnapshot, int $vatRate): Order
@@ -308,6 +349,7 @@ class CheckoutController extends Controller
                     'purchased_at' => Carbon::now(),
                 ]);
 
+                $this->recordLeadSale($cartItem->lead, $user->id, $order->id, null, $acquisitionType, 0.0);
                 $this->applyLeadStatusAfterPurchase($cartItem->lead, $acquisitionType);
             }
 
