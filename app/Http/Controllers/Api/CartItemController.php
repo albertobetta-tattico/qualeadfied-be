@@ -31,6 +31,20 @@ class CartItemController extends Controller
         ]);
 
         $user = $request->user();
+
+        // Pre-check del vincolo unique(user_id, lead_id): senza questo, un secondo
+        // POST sullo stesso lead lasciava partire l'INSERT che andava in
+        // QueryException → 500 generico lato client. Meglio rispondere 422 con un
+        // messaggio interpretabile dal frontend.
+        $alreadyInCart = CartItem::where('user_id', $user->id)
+            ->where('lead_id', $validated['lead_id'])
+            ->exists();
+        if ($alreadyInCart) {
+            throw ValidationException::withMessages([
+                'lead_id' => 'Questo lead è già nel tuo carrello.',
+            ]);
+        }
+
         $lead = Lead::with('categories.currentPrice')->findOrFail($validated['lead_id']);
 
         $resolved = $this->resolvePricing($user, $lead, $validated['purchase_mode']);
